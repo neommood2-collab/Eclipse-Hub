@@ -1,41 +1,489 @@
 
--- AIMLOCK AUTOMÁTICO
--- Todos os jogadores, sem verificar times
+--==================================================
+-- ECLIPSE HUB - SHOOTING EDITION
+-- Roblox Studio Lite | LocalScript
+--==================================================
 
-local function closestEnemy()
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Remove versão anterior
+local old = playerGui:FindFirstChild("EclipseHub")
+if old then old:Destroy() end
+
+local COLORS = {
+    bg = Color3.fromRGB(13, 15, 25),
+    panel = Color3.fromRGB(22, 25, 39),
+    card = Color3.fromRGB(30, 35, 53),
+    blue = Color3.fromRGB(65, 120, 255),
+    purple = Color3.fromRGB(140, 85, 255),
+    white = Color3.fromRGB(240, 243, 255),
+    gray = Color3.fromRGB(155, 165, 190),
+    red = Color3.fromRGB(255, 65, 75),
+    green = Color3.fromRGB(65, 210, 135)
+}
+
+local state = {
+    Aimlock = false,
+    ESP = false,
+    Speed = false,
+    Jump = false,
+    Noclip = false,
+    Fullbright = false,
+    NoFog = false,
+    Crosshair = false,
+    FOV = false
+}
+
+local originalLighting = {
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    FogEnd = Lighting.FogEnd,
+    GlobalShadows = Lighting.GlobalShadows
+}
+
+local originalFOV = 70
+local highlights = {}
+local connections = {}
+local minimized = false
+local currentPage = nil
+
+--==================================================
+-- GUI PRINCIPAL
+--==================================================
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "EclipseHub"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 100
+gui.Parent = playerGui
+
+local function corner(obj, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius or 10)
+    c.Parent = obj
+    return c
+end
+
+local function stroke(obj, color, thickness)
+    local s = Instance.new("UIStroke")
+    s.Color = color or COLORS.blue
+    s.Thickness = thickness or 1
+    s.Transparency = 0.2
+    s.Parent = obj
+    return s
+end
+
+local function make(class, props, parent)
+    local obj = Instance.new(class)
+    for k, v in pairs(props or {}) do
+        obj[k] = v
+    end
+    obj.Parent = parent
+    return obj
+end
+
+local function label(parent, text, size, color, height)
+    return make("TextLabel", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, height or 28),
+        Font = Enum.Font.Gotham,
+        Text = text,
+        TextSize = size or 13,
+        TextColor3 = color or COLORS.white,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextWrapped = true
+    }, parent)
+end
+
+local main = make("Frame", {
+    Name = "Main",
+    Size = UDim2.new(0, 510, 0, 440),
+    Position = UDim2.new(0.5, -255, 0.5, -220),
+    BackgroundColor3 = COLORS.bg,
+    BorderSizePixel = 0
+}, gui)
+corner(main, 14)
+stroke(main, COLORS.blue, 1.5)
+
+local top = make("Frame", {
+    Size = UDim2.new(1, 0, 0, 55),
+    BackgroundColor3 = COLORS.panel,
+    BorderSizePixel = 0
+}, main)
+corner(top, 14)
+
+local title = make("TextLabel", {
+    BackgroundTransparency = 1,
+    Position = UDim2.new(0, 17, 0, 5),
+    Size = UDim2.new(0, 300, 0, 26),
+    Font = Enum.Font.GothamBold,
+    Text = "ECLIPSE HUB",
+    TextSize = 19,
+    TextColor3 = COLORS.white,
+    TextXAlignment = Enum.TextXAlignment.Left
+}, top)
+
+local subtitle = make("TextLabel", {
+    BackgroundTransparency = 1,
+    Position = UDim2.new(0, 18, 0, 29),
+    Size = UDim2.new(0, 250, 0, 17),
+    Font = Enum.Font.Gotham,
+    Text = "SHOOTING EDITION",
+    TextSize = 10,
+    TextColor3 = COLORS.gray,
+    TextXAlignment = Enum.TextXAlignment.Left
+}, top)
+
+local minimize = make("TextButton", {
+    Size = UDim2.fromOffset(34, 30),
+    Position = UDim2.new(1, -78, 0, 12),
+    BackgroundColor3 = COLORS.card,
+    Text = "—",
+    TextColor3 = COLORS.white,
+    TextSize = 18,
+    Font = Enum.Font.GothamBold
+}, top)
+corner(minimize, 8)
+
+local close = make("TextButton", {
+    Size = UDim2.fromOffset(34, 30),
+    Position = UDim2.new(1, -39, 0, 12),
+    BackgroundColor3 = COLORS.red,
+    Text = "×",
+    TextColor3 = COLORS.white,
+    TextSize = 20,
+    Font = Enum.Font.GothamBold
+}, top)
+corner(close, 8)
+
+-- Arrastar janela
+local dragging = false
+local dragStart
+local startPosition
+local dragInput
+
+top.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPosition = main.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+top.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input == dragInput then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(
+            startPosition.X.Scale,
+            startPosition.X.Offset + delta.X,
+            startPosition.Y.Scale,
+            startPosition.Y.Offset + delta.Y
+        )
+    end
+end)
+
+--==================================================
+-- CONTEÚDO E ABAS
+--==================================================
+
+local content = make("Frame", {
+    Position = UDim2.new(0, 0, 0, 57),
+    Size = UDim2.new(1, 0, 1, -57),
+    BackgroundTransparency = 1
+}, main)
+
+local tabBar = make("ScrollingFrame", {
+    Size = UDim2.new(1, -20, 0, 43),
+    Position = UDim2.new(0, 10, 0, 3),
+    BackgroundTransparency = 1,
+    BorderSizePixel = 0,
+    ScrollBarThickness = 2,
+    ScrollingDirection = Enum.ScrollingDirection.X,
+    CanvasSize = UDim2.new(0, 0, 0, 0),
+    AutomaticCanvasSize = Enum.AutomaticSize.X
+}, content)
+
+local tabLayout = make("UIListLayout", {
+    FillDirection = Enum.FillDirection.Horizontal,
+    Padding = UDim.new(0, 6),
+    SortOrder = Enum.SortOrder.LayoutOrder
+}, tabBar)
+
+local pageHolder = make("Frame", {
+    Position = UDim2.new(0, 10, 0, 51),
+    Size = UDim2.new(1, -20, 1, -58),
+    BackgroundTransparency = 1
+}, content)
+
+local pages = {}
+
+local function createPage(name)
+    local page = make("ScrollingFrame", {
+        Name = name,
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 3,
+        ScrollBarImageColor3 = COLORS.blue,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        Visible = false
+    }, pageHolder)
+
+    make("UIListLayout", {
+        Padding = UDim.new(0, 8),
+        SortOrder = Enum.SortOrder.LayoutOrder
+    }, page)
+
+    pages[name] = page
+    return page
+end
+
+local function showPage(name)
+    currentPage = name
+    for pageName, page in pairs(pages) do
+        page.Visible = pageName == name
+    end
+end
+
+local function createTab(name)
+    local b = make("TextButton", {
+        Size = UDim2.fromOffset(88, 32),
+        BackgroundColor3 = COLORS.card,
+        Text = name,
+        TextColor3 = COLORS.white,
+        Font = Enum.Font.GothamBold,
+        TextSize = 11
+    }, tabBar)
+    corner(b, 8)
+
+    b.MouseButton1Click:Connect(function()
+        showPage(name)
+    end)
+end
+
+local function section(parent, text)
+    local t = label(parent, text, 13, COLORS.blue, 25)
+    t.Font = Enum.Font.GothamBold
+    return t
+end
+
+local function info(parent, text)
+    local t = label(parent, text, 11, COLORS.gray, 34)
+    return t
+end
+
+local function actionButton(parent, text, callback)
+    local b = make("TextButton", {
+        Size = UDim2.new(1, -4, 0, 39),
+        BackgroundColor3 = COLORS.card,
+        Text = text,
+        TextColor3 = COLORS.white,
+        Font = Enum.Font.GothamBold,
+        TextSize = 12,
+        AutoButtonColor = true
+    }, parent)
+    corner(b, 9)
+    stroke(b, Color3.fromRGB(55, 65, 95), 1)
+
+    b.MouseButton1Click:Connect(callback)
+    return b
+end
+
+local function toggleButton(parent, name, key, callback)
+    local b = actionButton(parent, name .. "  [OFF]", function() end)
+
+    local function refresh()
+        b.Text = name .. (state[key] and "  [ON]" or "  [OFF]")
+        b.BackgroundColor3 = state[key] and COLORS.blue or COLORS.card
+    end
+
+    b.MouseButton1Click:Connect(function()
+        state[key] = not state[key]
+        if callback then callback(state[key]) end
+        refresh()
+    end)
+
+    refresh()
+    return b
+end
+
+--==================================================
+-- CRIAR PÁGINAS
+--==================================================
+
+local home = createPage("Home")
+local geral = createPage("Geral")
+local visual = createPage("Visual")
+local aim = createPage("Aimlock")
+local config = createPage("Config")
+
+for _, name in ipairs({"Home", "Geral", "Visual", "Aimlock", "Config"}) do
+    createTab(name)
+end
+
+section(home, "BEM-VINDO AO ECLIPSE HUB")
+info(home, "Painel de recursos para o seu jogo de tiro.")
+info(home, "Versão: v1.0 • Shooting Edition")
+
+section(home, "NOSSO DISCORD")
+
+local discordLink = "https://discord.gg/kvphwTWqw"
+
+local discordBox = make("TextBox", {
+    Size = UDim2.new(1, -4, 0, 38),
+    BackgroundColor3 = COLORS.card,
+    Text = discordLink,
+    TextColor3 = COLORS.white,
+    Font = Enum.Font.Gotham,
+    TextSize = 11,
+    ClearTextOnFocus = false,
+    TextEditable = true
+}, home)
+corner(discordBox, 8)
+
+actionButton(home, "SELECIONAR LINK DO DISCORD", function()
+    discordBox:CaptureFocus()
+    discordBox.CursorPosition = #discordBox.Text + 1
+    discordBox.SelectionStart = 1
+end)
+
+section(geral, "MOVIMENTO")
+info(geral, "Ative ou desative os recursos de movimento.")
+
+toggleButton(geral, "Speed", "Speed")
+toggleButton(geral, "Jump", "Jump")
+toggleButton(geral, "Noclip", "Noclip")
+
+section(visual, "RECURSOS VISUAIS")
+toggleButton(visual, "ESP Vermelho", "ESP")
+toggleButton(visual, "Fullbright", "Fullbright")
+toggleButton(visual, "NoFog", "NoFog")
+toggleButton(visual, "Crosshair", "Crosshair")
+toggleButton(visual, "Círculo FOV", "FOV")
+
+section(aim, "MIRA AUTOMÁTICA")
+info(aim, "Procura o jogador mais próximo do seu personagem e acompanha a cabeça dele.")
+toggleButton(aim, "Aimlock", "Aimlock")
+
+section(config, "CONFIGURAÇÕES")
+info(config, "Configurações gerais do painel.")
+
+actionButton(config, "RESTAURAR VELOCIDADE E PULO", function()
+    state.Speed = false
+    state.Jump = false
+end)
+
+actionButton(config, "DESATIVAR TODOS OS RECURSOS", function()
+    for key in pairs(state) do
+        state[key] = false
+    end
+    for _, page in pairs(pages) do
+        for _, obj in ipairs(page:GetChildren()) do
+            if obj:IsA("TextButton") then
+                local name = obj.Text:match("^(.-)%s+%[")
+                if name then
+                    obj.Text = name .. "  [OFF]"
+                    obj.BackgroundColor3 = COLORS.card
+                end
+            end
+        end
+    end
+end)
+
+showPage("Home")
+
+--==================================================
+-- MINIMIZAR E FECHAR
+--==================================================
+
+minimize.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    content.Visible = not minimized
+    main.Size = minimized
+        and UDim2.new(0, 510, 0, 55)
+        or UDim2.new(0, 510, 0, 440)
+end)
+
+local function cleanup()
+    RunService:UnbindFromRenderStep("EclipseAimlock")
+    for _, connection in ipairs(connections) do
+        pcall(function() connection:Disconnect() end)
+    end
+    for _, highlight in pairs(highlights) do
+        if highlight then highlight:Destroy() end
+    end
+    Lighting.Brightness = originalLighting.Brightness
+    Lighting.ClockTime = originalLighting.ClockTime
+    Lighting.FogEnd = originalLighting.FogEnd
+    Lighting.GlobalShadows = originalLighting.GlobalShadows
+    local camera = workspace.CurrentCamera
+    if camera then camera.FieldOfView = originalFOV end
+    gui:Destroy()
+end
+
+close.MouseButton1Click:Connect(cleanup)
+
+--==================================================
+-- AIMLOCK
+--==================================================
+
+local function closestPlayerHead()
+    local character = player.Character
+    local root = character and character:FindFirstChild("HumanoidRootPart")
 
     if not root then return nil end
 
-    local bestTarget = nil
-    local bestDistance = math.huge
+    local closestHead = nil
+    local shortestDistance = math.huge
 
-    for _,plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player then
-            local targetChar = plr.Character
-            local hum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
-            local targetRoot = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
-            local head = targetChar and targetChar:FindFirstChild("Head")
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        if otherPlayer ~= player then
+            local otherCharacter = otherPlayer.Character
+            local humanoid = otherCharacter
+                and otherCharacter:FindFirstChildOfClass("Humanoid")
+            local otherRoot = otherCharacter
+                and otherCharacter:FindFirstChild("HumanoidRootPart")
+            local head = otherCharacter
+                and otherCharacter:FindFirstChild("Head")
 
-            if hum and hum.Health > 0 and targetRoot and head then
-                local distance = (targetRoot.Position - root.Position).Magnitude
+            if humanoid and humanoid.Health > 0 and otherRoot and head then
+                local distance = (otherRoot.Position - root.Position).Magnitude
 
-                if distance < bestDistance then
-                    bestDistance = distance
-                    bestTarget = head
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    closestHead = head
                 end
             end
         end
     end
 
-    return bestTarget
+    return closestHead
 end
 
--- Mira automática para testes no próprio jogo
-local aimConnection
-
-aimConnection = RunService:BindToRenderStep(
+RunService:BindToRenderStep(
     "EclipseAimlock",
     Enum.RenderPriority.Camera.Value + 1,
     function()
@@ -46,18 +494,242 @@ aimConnection = RunService:BindToRenderStep(
 
         if not state.Aimlock then return end
 
-        local target = closestEnemy()
-        local cam = workspace.CurrentCamera
+        local camera = workspace.CurrentCamera
+        local target = closestPlayerHead()
 
-        if not target or not cam then return end
+        if not camera or not target or not target.Parent then
+            return
+        end
 
-        local direction = target.Position - cam.CFrame.Position
-
-        if direction.Magnitude > 0 then
-            cam.CFrame = CFrame.lookAt(
-                cam.CFrame.Position,
+        local direction = target.Position - camera.CFrame.Position
+        if direction.Magnitude > 0.01 then
+            local goal = CFrame.lookAt(
+                camera.CFrame.Position,
                 target.Position
             )
+
+            camera.CFrame = camera.CFrame:Lerp(goal, 0.22)
         end
     end
 )
+
+--==================================================
+-- ESP VERMELHO
+--==================================================
+
+local function removeESP(otherPlayer)
+    if highlights[otherPlayer] then
+        highlights[otherPlayer]:Destroy()
+        highlights[otherPlayer] = nil
+    end
+end
+
+local function createESP(otherPlayer)
+    removeESP(otherPlayer)
+
+    if not state.ESP or otherPlayer == player then return end
+
+    local character = otherPlayer.Character
+    if not character then return end
+
+    local h = Instance.new("Highlight")
+    h.Name = "EclipseESP"
+    h.Adornee = character
+    h.FillColor = COLORS.red
+    h.OutlineColor = COLORS.red
+    h.FillTransparency = 0.65
+    h.OutlineTransparency = 0
+    h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    h.Parent = gui
+
+    highlights[otherPlayer] = h
+end
+
+local function refreshESP()
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        if otherPlayer ~= player then
+            if state.ESP then
+                createESP(otherPlayer)
+            else
+                removeESP(otherPlayer)
+            end
+        end
+    end
+end
+
+table.insert(connections, Players.PlayerAdded:Connect(function(otherPlayer)
+    otherPlayer.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        if state.ESP then createESP(otherPlayer) end
+    end)
+end))
+
+table.insert(connections, Players.PlayerRemoving:Connect(function(otherPlayer)
+    removeESP(otherPlayer)
+end))
+
+for _, otherPlayer in ipairs(Players:GetPlayers()) do
+    if otherPlayer ~= player then
+        otherPlayer.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            if state.ESP then createESP(otherPlayer) end
+        end)
+    end
+end
+
+--==================================================
+-- CROSSHAIR E FOV
+--==================================================
+
+local crosshair = make("TextLabel", {
+    Size = UDim2.fromOffset(30, 30),
+    Position = UDim2.new(0.5, -15, 0.5, -15),
+    BackgroundTransparency = 1,
+    Text = "+",
+    TextColor3 = COLORS.red,
+    TextSize = 27,
+    Font = Enum.Font.GothamBold,
+    Visible = false,
+    ZIndex = 20
+}, gui)
+
+local fovCircle = make("Frame", {
+    Size = UDim2.fromOffset(220, 220),
+    Position = UDim2.new(0.5, -110, 0.5, -110),
+    BackgroundTransparency = 1,
+    Visible = false,
+    ZIndex = 19
+}, gui)
+corner(fovCircle, 200)
+stroke(fovCircle, COLORS.blue, 2)
+
+--==================================================
+-- MOVIMENTO E ILUMINAÇÃO
+--==================================================
+
+local noclipConnection
+
+table.insert(connections, RunService.Stepped:Connect(function()
+    local character = player.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+    if humanoid then
+        if state.Speed then
+            humanoid.WalkSpeed = 28
+        else
+            humanoid.WalkSpeed = 16
+        end
+
+        if state.Jump then
+            humanoid.UseJumpPower = true
+            humanoid.JumpPower = 75
+        else
+            humanoid.JumpPower = 50
+        end
+    end
+
+    if state.Noclip and character then
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end))
+
+table.insert(connections, RunService.Heartbeat:Connect(function()
+    if state.Fullbright then
+        Lighting.Brightness = 3
+        Lighting.ClockTime = 14
+        Lighting.GlobalShadows = false
+    else
+        Lighting.Brightness = originalLighting.Brightness
+        Lighting.ClockTime = originalLighting.ClockTime
+        Lighting.GlobalShadows = originalLighting.GlobalShadows
+    end
+
+    if state.NoFog then
+        Lighting.FogEnd = 100000
+    else
+        Lighting.FogEnd = originalLighting.FogEnd
+    end
+
+    crosshair.Visible = state.Crosshair
+    fovCircle.Visible = state.FOV
+end))
+
+--==================================================
+-- POPUP DO DISCORD
+--==================================================
+
+local popup = make("Frame", {
+    Size = UDim2.fromOffset(320, 205),
+    Position = UDim2.new(0.5, -160, 0.5, -102),
+    BackgroundColor3 = COLORS.panel,
+    BorderSizePixel = 0,
+    ZIndex = 50
+}, gui)
+corner(popup, 14)
+stroke(popup, COLORS.purple, 2)
+
+local popupTitle = make("TextLabel", {
+    Position = UDim2.new(0, 15, 0, 15),
+    Size = UDim2.new(1, -30, 0, 35),
+    BackgroundTransparency = 1,
+    Text = "ECLIPSE HUB",
+    TextColor3 = COLORS.white,
+    Font = Enum.Font.GothamBold,
+    TextSize = 20,
+    ZIndex = 51
+}, popup)
+
+local popupText = make("TextLabel", {
+    Position = UDim2.new(0, 15, 0, 53),
+    Size = UDim2.new(1, -30, 0, 35),
+    BackgroundTransparency = 1,
+    Text = "Entre no nosso servidor do Discord?",
+    TextColor3 = COLORS.gray,
+    Font = Enum.Font.Gotham,
+    TextSize = 12,
+    TextWrapped = true,
+    ZIndex = 51
+}, popup)
+
+local popupLink = make("TextBox", {
+    Position = UDim2.new(0, 15, 0, 95),
+    Size = UDim2.new(1, -30, 0, 32),
+    BackgroundColor3 = COLORS.card,
+    Text = discordLink,
+    TextColor3 = COLORS.white,
+    Font = Enum.Font.Gotham,
+    TextSize = 10,
+    ClearTextOnFocus = false,
+    ZIndex = 51
+}, popup)
+corner(popupLink, 7)
+
+local join = make("TextButton", {
+    Position = UDim2.new(0, 15, 0, 137),
+    Size = UDim2.new(0.57, -8, 0, 38),
+    BackgroundColor3 = COLORS.blue,
+    Text = "ENTRAR NO DISCORD",
+    TextColor3 = COLORS.white,
+    Font = Enum.Font.GothamBold,
+    TextSize = 10,
+    ZIndex = 51
+}, popup)
+corner(join, 8)
+
+local later = make("TextButton", {
+    Position = UDim2.new(0.59, 0, 0, 137),
+    Size = UDim2.new(0.41, -15, 0, 38),
+    BackgroundColor3 = COLORS.card,
+    Text = "AGORA NÃO",
+    TextColor3 = COLORS.white,
+    Font = Enum.Font.GothamBold,
+    TextSize = 10,
+    ZIndex = 51
+}, popup)
+corner(later, 8)
+
+join.MouseButton1Cl
