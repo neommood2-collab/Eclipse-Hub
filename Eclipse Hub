@@ -744,3 +744,4 @@ later.MouseButton1Click:Connect(function()
 end)
 
 print("ECLIPSE HUB SHOOTING EDITION carregado!")
+.
