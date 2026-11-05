@@ -13,7 +13,6 @@ local UIS = game:GetService("UserInputService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local camera = workspace.CurrentCamera
-
 local DISCORD_LINK = "https://discord.gg/kvphwTWqw"
 
 -- LIMPAR VERSAO ANTERIOR
@@ -332,6 +331,7 @@ label(home,"Bem-vindo ao Eclipse Hub!",35,17,BLUE)
 label(home,"Shooting Edition",25,13)
 label(home,"By: Neom Mood 2",45,19,Color3.fromRGB(255,205,75))
 label(home,"Convite oficial do Discord",25,12)
+
 local homeLink = Instance.new("TextBox")
 homeLink.Size = UDim2.new(1,-10,0,35)
 homeLink.Text = DISCORD_LINK
@@ -362,9 +362,11 @@ toggle(visual,"FOV visual","FOV")
 button(visual,"FOV pequeno",function()
     settings.FOVSize = 120
 end)
+
 button(visual,"FOV médio",function()
     settings.FOVSize = 180
 end)
+
 button(visual,"FOV grande",function()
     settings.FOVSize = 250
 end)
@@ -386,14 +388,16 @@ toggle(esp,"Nome","Name")
 toggle(esp,"Distância","Distance")
 toggle(esp,"Vida","Health")
 toggle(esp,"Skeleton","Skeleton")
-
 label(esp,"Distância máxima: 1000 studs",30,12)
+
 button(esp,"Distância: 250",function()
     settings.MaxDistance = 250
 end)
+
 button(esp,"Distância: 500",function()
     settings.MaxDistance = 500
 end)
+
 button(esp,"Distância: 1000",function()
     settings.MaxDistance = 1000
 end)
@@ -426,6 +430,7 @@ reopen.MouseButton1Click:Connect(function()
 end)
 
 local minimized = false
+
 minimize.MouseButton1Click:Connect(function()
     minimized = not minimized
     content.Visible = not minimized
@@ -486,7 +491,6 @@ local function createESP(targetPlayer)
     highlight.Parent = espObjects[targetPlayer]
     billboard.Parent = espObjects[targetPlayer]
     espObjects[targetPlayer].Parent = gui
-
     espObjects[targetPlayer]:SetAttribute("Character", true)
 end
 
@@ -503,6 +507,7 @@ local function visibleToCamera(character)
     }
 
     local direction = head.Position - camera.CFrame.Position
+
     local result = workspace:Raycast(
         camera.CFrame.Position,
         direction,
@@ -569,6 +574,7 @@ local function updateESP()
                     if settings.Distance then
                         local myRoot = player.Character
                             and player.Character:FindFirstChild("HumanoidRootPart")
+
                         if myRoot then
                             local d = (myRoot.Position-root.Position).Magnitude
                             table.insert(text,math.floor(d).." studs")
@@ -598,6 +604,7 @@ local function watchPlayer(p)
     p.CharacterAdded:Connect(function()
         clearESP(p)
     end)
+
     p.CharacterRemoving:Connect(function()
         clearESP(p)
     end)
@@ -629,6 +636,7 @@ fov.Position = UDim2.fromScale(0.5,0.5)
 fov.BackgroundTransparency = 1
 fov.Parent = gui
 corner(fov,200)
+
 local fovStroke = Instance.new("UIStroke")
 fovStroke.Color = BLUE
 fovStroke.Thickness = 2
