@@ -1,983 +1,654 @@
 
 --========================================================
 -- ECLIPSE HUB - SHOOTING EDITION
--- By: Neom Mood 2
--- Roblox | LocalScript
+-- Versao atualizada
+-- Roblox Studio | LocalScript
+-- Coloque em StarterPlayerScripts
 --========================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
+local UIS = game:GetService("UserInputService")
 
-local Player = Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local camera = workspace.CurrentCamera
 
-local VERSION = "v1.4"
-local DISCORD = "https://discord.gg/kvphwTWqw"
+local DISCORD_LINK = "https://discord.gg/kvphwTWqw"
 
---========================================================
+-- LIMPAR VERSAO ANTERIOR
+local old = playerGui:FindFirstChild("EclipseHub")
+if old then old:Destroy() end
+
 -- ESTADOS
---========================================================
+local settings = {
+    ESP = false,
+    Box = true,
+    Tracer = false,
+    Name = true,
+    Distance = true,
+    Health = true,
+    Skeleton = false,
+    WallCheck = true,
+    TeamCheck = false,
+    MaxDistance = 1000,
+    Crosshair = true,
+    FOV = false,
+    FOVSize = 180
+}
 
-local AimEnabled = false
-local FOVEnabled = false
-local CrosshairEnabled = true
-local Hidden = false
-local Minimized = false
+local espObjects = {}
 
-local SelectedPart = "Head"
-local AimSmoothness = 0.20
-local FOVSize = 180
-local FOVColor = Color3.fromRGB(0,170,255)
+-- CORES
+local BLUE = Color3.fromRGB(0,145,255)
+local DARK = Color3.fromRGB(19,23,34)
+local PANEL = Color3.fromRGB(12,16,26)
+local WHITE = Color3.new(1,1,1)
 
-local AimConnection
-local Dragging = false
-local DragStart
-local StartPosition
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "EclipseHub"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.Parent = playerGui
 
---========================================================
--- LIMPAR GUI ANTERIOR
---========================================================
-
-local OldGui = PlayerGui:FindFirstChild("EclipseHub")
-if OldGui then
-    OldGui:Destroy()
+local function corner(obj, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0,radius or 8)
+    c.Parent = obj
 end
 
---========================================================
--- FUNÇÕES DE INTERFACE
---========================================================
-
-local function Create(className, properties, parent)
-    local object = Instance.new(className)
-
-    for property, value in pairs(properties) do
-        object[property] = value
-    end
-
-    object.Parent = parent
-    return object
+local function stroke(obj,color,thickness)
+    local s = Instance.new("UIStroke")
+    s.Color = color or BLUE
+    s.Thickness = thickness or 1
+    s.Parent = obj
 end
 
-local function Round(object, radius)
-    Create("UICorner", {
-        CornerRadius = UDim.new(0, radius)
-    }, object)
+local function label(parent,text,height,size,color)
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1,-10,0,height or 30)
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextColor3 = color or WHITE
+    l.Font = Enum.Font.GothamBold
+    l.TextSize = size or 13
+    l.Parent = parent
+    return l
 end
 
-local function Outline(object, color, thickness)
-    Create("UIStroke", {
-        Color = color or Color3.fromRGB(0,130,255),
-        Thickness = thickness or 1
-    }, object)
+local function button(parent,text,callback)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1,-10,0,36)
+    b.BackgroundColor3 = Color3.fromRGB(39,46,64)
+    b.TextColor3 = WHITE
+    b.Text = text
+    b.Font = Enum.Font.Gotham
+    b.TextSize = 13
+    b.Parent = parent
+    corner(b,7)
+    b.MouseButton1Click:Connect(callback)
+    return b
 end
 
-local function Label(parent, text, height, color, size)
-    return Create("TextLabel", {
-        Size = UDim2.new(1,-10,0,height or 30),
-        BackgroundTransparency = 1,
-        Text = text,
-        TextColor3 = color or Color3.new(1,1,1),
-        Font = Enum.Font.GothamBold,
-        TextSize = size or 13,
-        TextWrapped = true
-    }, parent)
+-- CARREGAMENTO
+local loading = Instance.new("Frame")
+loading.Size = UDim2.fromScale(1,1)
+loading.BackgroundColor3 = Color3.fromRGB(9,12,21)
+loading.Parent = gui
+
+local title = label(loading,"ECLIPSE HUB",55,30,BLUE)
+title.Position = UDim2.fromScale(0,0.36)
+
+local subtitle = label(loading,"Shooting Edition • Carregando...",30,13)
+subtitle.Position = UDim2.fromScale(0,0.48)
+
+local back = Instance.new("Frame")
+back.Size = UDim2.fromOffset(250,8)
+back.Position = UDim2.new(0.5,-125,0.57,0)
+back.BackgroundColor3 = Color3.fromRGB(35,42,58)
+back.Parent = loading
+corner(back,8)
+
+local bar = Instance.new("Frame")
+bar.Size = UDim2.fromScale(0,1)
+bar.BackgroundColor3 = BLUE
+bar.Parent = back
+corner(bar,8)
+
+for i=1,100 do
+    bar.Size = UDim2.fromScale(i/100,1)
+    task.wait(0.018)
 end
 
-local function Button(parent, text, callback)
-    local button = Create("TextButton", {
-        Size = UDim2.new(1,-10,0,36),
-        BackgroundColor3 = Color3.fromRGB(38,45,62),
-        TextColor3 = Color3.fromRGB(245,247,255),
-        Text = text,
-        Font = Enum.Font.Gotham,
-        TextSize = 13,
-        AutoButtonColor = true
-    }, parent)
+loading:Destroy()
 
-    Round(button,7)
+-- CONVITE DISCORD
+local popup = Instance.new("Frame")
+popup.Size = UDim2.fromOffset(310,190)
+popup.Position = UDim2.new(0.5,-155,0.5,-95)
+popup.BackgroundColor3 = DARK
+popup.Parent = gui
+corner(popup,12)
+stroke(popup,BLUE,1.5)
 
-    button.MouseButton1Click:Connect(callback)
-    return button
-end
+local popTitle = label(popup,"Entre no nosso Discord",40,17,BLUE)
+popTitle.Position = UDim2.fromOffset(0,12)
 
-local function UpdateButton(button, name, enabled)
-    button.Text = name .. (enabled and ": ON" or ": OFF")
-    button.BackgroundColor3 = enabled
-        and Color3.fromRGB(20,95,75)
-        or Color3.fromRGB(38,45,62)
-end
+local link = Instance.new("TextBox")
+link.Size = UDim2.new(1,-24,0,35)
+link.Position = UDim2.fromOffset(12,62)
+link.BackgroundColor3 = Color3.fromRGB(35,42,58)
+link.TextColor3 = WHITE
+link.Text = DISCORD_LINK
+link.TextEditable = false
+link.ClearTextOnFocus = false
+link.Font = Enum.Font.Gotham
+link.TextSize = 12
+link.Parent = popup
+corner(link,7)
 
---========================================================
--- TELA DE CARREGAMENTO
---========================================================
+local copy = button(popup,"Selecionar link para copiar",function()
+    link:CaptureFocus()
+    link.CursorPosition = 1
+    link.SelectionStart = #link.Text + 1
+end)
+copy.Position = UDim2.fromOffset(5,105)
 
-local LoadingGui = Create("ScreenGui", {
-    Name = "EclipseLoading",
-    IgnoreGuiInset = true,
-    ResetOnSpawn = false
-}, PlayerGui)
+local enter = button(popup,"Agora não",function()
+    popup:Destroy()
+end)
+enter.Position = UDim2.fromOffset(5,147)
+enter.Size = UDim2.new(0.5,-8,0,32)
 
-local LoadingFrame = Create("Frame", {
-    Size = UDim2.fromScale(1,1),
-    BackgroundColor3 = Color3.fromRGB(9,12,21)
-}, LoadingGui)
+local join = button(popup,"Entrar agora",function()
+    link:CaptureFocus()
+    link.CursorPosition = 1
+    link.SelectionStart = #link.Text + 1
+end)
+join.Position = UDim2.new(0.5,3,0,147)
+join.Size = UDim2.new(0.5,-8,0,32)
+join.BackgroundColor3 = BLUE
 
-local LoadingTitle = Create("TextLabel", {
-    Size = UDim2.new(1,0,0,60),
-    Position = UDim2.new(0,0,0.35,0),
-    BackgroundTransparency = 1,
-    Text = "ECLIPSE HUB",
-    TextColor3 = Color3.fromRGB(75,165,255),
-    Font = Enum.Font.GothamBlack,
-    TextSize = 30
-}, LoadingFrame)
+-- MENU PRINCIPAL
+local main = Instance.new("Frame")
+main.Size = UDim2.fromOffset(330,465)
+main.Position = UDim2.new(0.5,-165,0.5,-232)
+main.BackgroundColor3 = DARK
+main.Parent = gui
+main.Active = true
+corner(main,12)
+stroke(main,BLUE,1.5)
 
-local LoadingSubtitle = Create("TextLabel", {
-    Size = UDim2.new(1,0,0,30),
-    Position = UDim2.new(0,0,0.45,0),
-    BackgroundTransparency = 1,
-    Text = "Shooting Edition",
-    TextColor3 = Color3.fromRGB(210,215,230),
-    Font = Enum.Font.Gotham,
-    TextSize = 14
-}, LoadingFrame)
-
-local BarBack = Create("Frame", {
-    Size = UDim2.fromOffset(250,8),
-    Position = UDim2.new(0.5,-125,0.55,0),
-    BackgroundColor3 = Color3.fromRGB(35,42,58)
-}, LoadingFrame)
-Round(BarBack,8)
-
-local Bar = Create("Frame", {
-    Size = UDim2.fromScale(0,1),
-    BackgroundColor3 = Color3.fromRGB(0,145,255)
-}, BarBack)
-Round(Bar,8)
-
-for i = 1,100 do
-    Bar.Size = UDim2.fromScale(i/100,1)
-    task.wait(0.012)
-end
-
-LoadingGui:Destroy()
-
---========================================================
--- GUI PRINCIPAL
---========================================================
-
-local Gui = Create("ScreenGui", {
-    Name = "EclipseHub",
-    ResetOnSpawn = false,
-    IgnoreGuiInset = true,
-    DisplayOrder = 20
-}, PlayerGui)
-
-local Main = Create("Frame", {
-    Name = "Main",
-    Size = UDim2.fromOffset(340,480),
-    Position = UDim2.new(0.5,-170,0.5,-240),
-    BackgroundColor3 = Color3.fromRGB(18,22,33),
-    BorderSizePixel = 0,
-    Active = true
-}, Gui)
-
-Round(Main,12)
-Outline(Main,Color3.fromRGB(0,130,255),1.5)
-
---========================================================
 -- BARRA SUPERIOR
---========================================================
+local top = Instance.new("Frame")
+top.Size = UDim2.new(1,0,0,43)
+top.BackgroundColor3 = PANEL
+top.Parent = main
+top.Active = true
+corner(top,10)
 
-local Top = Create("Frame", {
-    Size = UDim2.new(1,0,0,44),
-    BackgroundColor3 = Color3.fromRGB(11,15,25),
-    BorderSizePixel = 0
-}, Main)
-Round(Top,10)
+local topTitle = label(top,"ECLIPSE HUB",35,15,Color3.fromRGB(100,185,255))
+topTitle.Position = UDim2.fromOffset(10,4)
+topTitle.TextXAlignment = Enum.TextXAlignment.Left
+topTitle.Size = UDim2.new(1,-100,0,35)
 
-local Title = Create("TextLabel", {
-    Size = UDim2.new(1,-110,1,0),
-    Position = UDim2.fromOffset(12,0),
-    BackgroundTransparency = 1,
-    Text = "ECLIPSE HUB",
-    TextColor3 = Color3.fromRGB(90,180,255),
-    Font = Enum.Font.GothamBlack,
-    TextSize = 15,
-    TextXAlignment = Enum.TextXAlignment.Left
-}, Top)
+local minimize = Instance.new("TextButton")
+minimize.Size = UDim2.fromOffset(35,35)
+minimize.Position = UDim2.new(1,-78,0,4)
+minimize.BackgroundColor3 = Color3.fromRGB(38,48,65)
+minimize.Text = "–"
+minimize.TextColor3 = WHITE
+minimize.TextSize = 22
+minimize.Parent = top
+corner(minimize,7)
 
-local MinButton = Create("TextButton", {
-    Size = UDim2.fromOffset(34,34),
-    Position = UDim2.new(1,-76,0,5),
-    BackgroundColor3 = Color3.fromRGB(40,50,68),
-    Text = "–",
-    TextColor3 = Color3.new(1,1,1),
-    TextSize = 22,
-    Font = Enum.Font.GothamBold
-}, Top)
-Round(MinButton,7)
+local close = Instance.new("TextButton")
+close.Size = UDim2.fromOffset(35,35)
+close.Position = UDim2.new(1,-39,0,4)
+close.BackgroundColor3 = Color3.fromRGB(150,45,55)
+close.Text = "×"
+close.TextColor3 = WHITE
+close.TextSize = 20
+close.Parent = top
+corner(close,7)
 
-local CloseButton = Create("TextButton", {
-    Size = UDim2.fromOffset(34,34),
-    Position = UDim2.new(1,-38,0,5),
-    BackgroundColor3 = Color3.fromRGB(145,45,55),
-    Text = "×",
-    TextColor3 = Color3.new(1,1,1),
-    TextSize = 20,
-    Font = Enum.Font.GothamBold
-}, Top)
-Round(CloseButton,7)
+-- ARRASTAR MENU
+local dragging = false
+local dragStart
+local startPosition
 
--- Arrastar janela pelo topo
-Top.InputBegan:Connect(function(input)
+top.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1
     or input.UserInputType == Enum.UserInputType.Touch then
-        Dragging = true
-        DragStart = input.Position
-        StartPosition = Main.Position
+        dragging = true
+        dragStart = input.Position
+        startPosition = main.Position
     end
 end)
 
-Top.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-    or input.UserInputType == Enum.UserInputType.Touch then
-        Dragging = false
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if Dragging and (
+UIS.InputChanged:Connect(function(input)
+    if dragging and (
         input.UserInputType == Enum.UserInputType.MouseMovement
         or input.UserInputType == Enum.UserInputType.Touch
     ) then
-        local delta = input.Position - DragStart
-
-        Main.Position = UDim2.new(
-            StartPosition.X.Scale,
-            StartPosition.X.Offset + delta.X,
-            StartPosition.Y.Scale,
-            StartPosition.Y.Offset + delta.Y
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(
+            startPosition.X.Scale,
+            startPosition.X.Offset + delta.X,
+            startPosition.Y.Scale,
+            startPosition.Y.Offset + delta.Y
         )
     end
 end)
 
---========================================================
--- CONTEÚDO E ABAS
---========================================================
+UIS.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
 
-local Content = Create("Frame", {
-    Position = UDim2.fromOffset(8,51),
-    Size = UDim2.new(1,-16,1,-59),
-    BackgroundTransparency = 1
-}, Main)
+-- CONTEUDO
+local content = Instance.new("Frame")
+content.Position = UDim2.fromOffset(8,50)
+content.Size = UDim2.new(1,-16,1,-58)
+content.BackgroundTransparency = 1
+content.Parent = main
 
-local TabBar = Create("ScrollingFrame", {
-    Size = UDim2.new(1,0,0,38),
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    ScrollBarThickness = 0,
-    AutomaticCanvasSize = Enum.AutomaticSize.X,
-    CanvasSize = UDim2.new()
-}, Content)
+local tabBar = Instance.new("ScrollingFrame")
+tabBar.Size = UDim2.new(1,0,0,38)
+tabBar.BackgroundTransparency = 1
+tabBar.ScrollBarThickness = 0
+tabBar.AutomaticCanvasSize = Enum.AutomaticSize.X
+tabBar.ScrollingDirection = Enum.ScrollingDirection.X
+tabBar.Parent = content
 
-local TabLayout = Create("UIListLayout", {
-    FillDirection = Enum.FillDirection.Horizontal,
-    Padding = UDim.new(0,5)
-}, TabBar)
+local tabLayout = Instance.new("UIListLayout")
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.Padding = UDim.new(0,5)
+tabLayout.Parent = tabBar
 
-local Pages = Create("Frame", {
-    Position = UDim2.fromOffset(0,44),
-    Size = UDim2.new(1,0,1,-44),
-    BackgroundTransparency = 1
-}, Content)
+local pages = Instance.new("Frame")
+pages.Position = UDim2.fromOffset(0,43)
+pages.Size = UDim2.new(1,0,1,-43)
+pages.BackgroundTransparency = 1
+pages.Parent = content
 
-local PageNames = {
-    "Home",
-    "Geral",
-    "Visual",
-    "Alvo",
-    "Config"
+local pageNames = {
+    "Home","Geral","Visual","Alvo","ESP","Config"
 }
 
-local PageObjects = {}
+local pageObjects = {}
 
-for _, name in ipairs(PageNames) do
-    local page = Create("ScrollingFrame", {
-        Name = name,
-        Size = UDim2.fromScale(1,1),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ScrollBarThickness = 3,
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        CanvasSize = UDim2.new(),
-        Visible = false
-    }, Pages)
+for _,name in ipairs(pageNames) do
+    local page = Instance.new("ScrollingFrame")
+    page.Name = name
+    page.Size = UDim2.fromScale(1,1)
+    page.BackgroundTransparency = 1
+    page.ScrollBarThickness = 3
+    page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    page.Visible = false
+    page.Parent = pages
 
-    Create("UIListLayout", {
-        Padding = UDim.new(0,7)
-    }, page)
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0,7)
+    layout.Parent = page
 
-    PageObjects[name] = page
-end
+    pageObjects[name] = page
 
-local function ShowPage(name)
-    for pageName, page in pairs(PageObjects) do
-        page.Visible = pageName == name
-    end
-end
-
-for _, name in ipairs(PageNames) do
-    local tab = Create("TextButton", {
-        Size = UDim2.fromOffset(73,32),
-        BackgroundColor3 = Color3.fromRGB(38,47,65),
-        Text = name,
-        TextColor3 = Color3.new(1,1,1),
-        Font = Enum.Font.GothamBold,
-        TextSize = 11
-    }, TabBar)
-
-    Round(tab,6)
+    local tab = Instance.new("TextButton")
+    tab.Size = UDim2.fromOffset(75,32)
+    tab.BackgroundColor3 = Color3.fromRGB(39,48,67)
+    tab.Text = name
+    tab.TextColor3 = WHITE
+    tab.Font = Enum.Font.GothamBold
+    tab.TextSize = 11
+    tab.Parent = tabBar
+    corner(tab,6)
 
     tab.MouseButton1Click:Connect(function()
-        ShowPage(name)
+        for n,p in pairs(pageObjects) do
+            p.Visible = n == name
+        end
     end)
 end
 
---========================================================
+local function toggle(parent,name,key)
+    local b
+    b = button(parent,name..": OFF",function()
+        settings[key] = not settings[key]
+        b.Text = name..(settings[key] and ": ON" or ": OFF")
+        b.BackgroundColor3 = settings[key]
+            and Color3.fromRGB(0,85,150)
+            or Color3.fromRGB(39,46,64)
+    end)
+    return b
+end
+
 -- HOME
---========================================================
+local home = pageObjects.Home
+label(home,"Bem-vindo ao Eclipse Hub!",35,17,BLUE)
+label(home,"Shooting Edition",25,13)
+label(home,"By: Neom Mood 2",45,19,Color3.fromRGB(255,205,75))
+label(home,"Convite oficial do Discord",25,12)
+local homeLink = Instance.new("TextBox")
+homeLink.Size = UDim2.new(1,-10,0,35)
+homeLink.Text = DISCORD_LINK
+homeLink.TextEditable = false
+homeLink.ClearTextOnFocus = false
+homeLink.TextColor3 = WHITE
+homeLink.BackgroundColor3 = Color3.fromRGB(35,42,58)
+homeLink.Parent = home
+corner(homeLink,7)
 
-local Home = PageObjects.Home
-
-Label(Home,"Bem-vindo ao Eclipse Hub",34,
-    Color3.fromRGB(100,180,255),17)
-
-Label(Home,"Shooting Edition • "..VERSION,25,
-    Color3.fromRGB(190,200,220),12)
-
-local Credit = Label(Home,"By: Neom Mood 2",48,
-    Color3.fromRGB(255,205,75),22)
-
-Credit.BackgroundTransparency = 0
-Credit.BackgroundColor3 = Color3.fromRGB(43,42,38)
-Round(Credit,8)
-Outline(Credit,Color3.fromRGB(255,190,55),1.5)
-
-Label(Home,"Discord",25,Color3.fromRGB(100,180,255),14)
-
-local DiscordBox = Create("TextBox", {
-    Size = UDim2.new(1,-10,0,36),
-    BackgroundColor3 = Color3.fromRGB(35,42,58),
-    TextColor3 = Color3.new(1,1,1),
-    Text = DISCORD,
-    ClearTextOnFocus = false,
-    TextEditable = false,
-    Font = Enum.Font.Gotham,
-    TextSize = 11
-}, Home)
-Round(DiscordBox,7)
-
-Button(Home,"Selecionar link do Discord",function()
-    DiscordBox:CaptureFocus()
-    DiscordBox.CursorPosition = 1
-    DiscordBox.SelectionStart = #DiscordBox.Text + 1
+button(home,"Selecionar link",function()
+    homeLink:CaptureFocus()
+    homeLink.CursorPosition = 1
+    homeLink.SelectionStart = #homeLink.Text + 1
 end)
 
---========================================================
 -- GERAL
---========================================================
+local general = pageObjects.Geral
+label(general,"Configurações gerais",30,15,BLUE)
+label(general,"Esta versão mantém os controles visuais.",35,12)
 
-local General = PageObjects.Geral
-
-local AimButton = Button(General,"Mira automática: OFF",function()
-    AimEnabled = not AimEnabled
-    UpdateButton(AimButton,"Mira automática",AimEnabled)
-end)
-
-Label(General,"Suavidade da mira",25,
-    Color3.fromRGB(100,180,255),13)
-
-local SmoothButton = Button(General,"Suavidade: 20%",function()
-    AimSmoothness = 0.20
-    SmoothButton.Text = "Suavidade: 20%"
-end)
-
-Button(General,"Suavidade: 40%",function()
-    AimSmoothness = 0.40
-    SmoothButton.Text = "Suavidade: 40%"
-end)
-
-Button(General,"Suavidade: 60%",function()
-    AimSmoothness = 0.60
-    SmoothButton.Text = "Suavidade: 60%"
-end)
-
---========================================================
 -- VISUAL
---========================================================
+local visual = pageObjects.Visual
+label(visual,"Elementos visuais",30,15,BLUE)
+toggle(visual,"Mira central","Crosshair")
+toggle(visual,"FOV visual","FOV")
 
-local Visual = PageObjects.Visual
-
-local FOVButton = Button(Visual,"FOV visual: OFF",function()
-    FOVEnabled = not FOVEnabled
-    UpdateButton(FOVButton,"FOV visual",FOVEnabled)
+button(visual,"FOV pequeno",function()
+    settings.FOVSize = 120
+end)
+button(visual,"FOV médio",function()
+    settings.FOVSize = 180
+end)
+button(visual,"FOV grande",function()
+    settings.FOVSize = 250
 end)
 
-local CrossButton = Button(Visual,"Mira central: ON",function()
-    CrosshairEnabled = not CrosshairEnabled
-    UpdateButton(CrossButton,"Mira central",CrosshairEnabled)
-end)
-
-Label(Visual,"Tamanho do FOV",25,
-    Color3.fromRGB(100,180,255),13)
-
-Button(Visual,"Pequeno",function()
-    FOVSize = 120
-end)
-
-Button(Visual,"Médio",function()
-    FOVSize = 180
-end)
-
-Button(Visual,"Grande",function()
-    FOVSize = 250
-end)
-
-Label(Visual,"Cor do FOV",25,
-    Color3.fromRGB(100,180,255),13)
-
---========================================================
 -- ALVO
---========================================================
+local target = pageObjects.Alvo
+label(target,"Verificação de visibilidade",30,15,BLUE)
+toggle(target,"Wall Check","WallCheck")
+toggle(target,"Team Check","TeamCheck")
+label(target,"Wall Check ignora personagens ocultos por paredes.",45,11)
 
-local TargetPage = PageObjects.Alvo
+-- ESP
+local esp = pageObjects.ESP
+label(esp,"ECLIPSE • ESP",35,17,BLUE)
+toggle(esp,"ESP geral","ESP")
+toggle(esp,"Box","Box")
+toggle(esp,"Tracer","Tracer")
+toggle(esp,"Nome","Name")
+toggle(esp,"Distância","Distance")
+toggle(esp,"Vida","Health")
+toggle(esp,"Skeleton","Skeleton")
 
-local Parts = {
-    "Head",
-    "UpperTorso",
-    "LowerTorso",
-    "HumanoidRootPart",
-    "Torso",
-    "LeftUpperArm",
-    "RightUpperArm",
-    "LeftUpperLeg",
-    "RightUpperLeg",
-    "Left Arm",
-    "Right Arm",
-    "Left Leg",
-    "Right Leg"
-}
-
-local PartButton = Button(TargetPage,"Parte: "..SelectedPart,function()
-    local index = table.find(Parts,SelectedPart) or 1
-    index = index % #Parts + 1
-    SelectedPart = Parts[index]
-    PartButton.Text = "Parte: "..SelectedPart
+label(esp,"Distância máxima: 1000 studs",30,12)
+button(esp,"Distância: 250",function()
+    settings.MaxDistance = 250
+end)
+button(esp,"Distância: 500",function()
+    settings.MaxDistance = 500
+end)
+button(esp,"Distância: 1000",function()
+    settings.MaxDistance = 1000
 end)
 
-Label(TargetPage,"Escolha uma parte do personagem",25,
-    Color3.fromRGB(100,180,255),13)
+-- CONFIG
+local config = pageObjects.Config
+label(config,"Configurações do menu",35,15,BLUE)
 
-for _, partName in ipairs(Parts) do
-    Button(TargetPage,partName,function()
-        SelectedPart = partName
-        PartButton.Text = "Parte: "..SelectedPart
-    end)
+local reopen = Instance.new("TextButton")
+reopen.Size = UDim2.fromOffset(43,43)
+reopen.Position = UDim2.new(0,12,0.5,-20)
+reopen.BackgroundColor3 = Color3.fromRGB(15,45,85)
+reopen.Text = "E"
+reopen.TextColor3 = Color3.fromRGB(100,190,255)
+reopen.Font = Enum.Font.GothamBlack
+reopen.TextSize = 23
+reopen.Visible = false
+reopen.Parent = gui
+corner(reopen,22)
+stroke(reopen,BLUE,2)
+
+button(config,"Esconder menu",function()
+    main.Visible = false
+    reopen.Visible = true
+end)
+
+reopen.MouseButton1Click:Connect(function()
+    main.Visible = true
+    reopen.Visible = false
+end)
+
+local minimized = false
+minimize.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    content.Visible = not minimized
+    main.Size = minimized
+        and UDim2.fromOffset(330,43)
+        or UDim2.fromOffset(330,465)
+    minimize.Text = minimized and "+" or "–"
+end)
+
+-- OBJETOS DE ESP
+local function clearESP(targetPlayer)
+    local oldObject = espObjects[targetPlayer]
+    if oldObject then
+        oldObject:Destroy()
+        espObjects[targetPlayer] = nil
+    end
 end
 
---========================================================
--- CONFIGURAÇÕES
---========================================================
+local function createESP(targetPlayer)
+    if espObjects[targetPlayer] then return end
 
-local Config = PageObjects.Config
+    local character = targetPlayer.Character
+    if not character then return end
 
-Label(Config,"Configurações do menu",30,
-    Color3.fromRGB(100,180,255),14)
+    local head = character:FindFirstChild("Head")
+    local root = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
 
-Button(Config,"Esconder menu",function()
-    Hidden = true
-    Main.Visible = false
-    Reopen.Visible = true
-end)
+    if not head or not root or not humanoid then return end
 
-Button(Config,"Restaurar configurações",function()
-    AimEnabled = false
-    FOVEnabled = false
-    CrosshairEnabled = true
-    SelectedPart = "Head"
-    AimSmoothness = 0.20
-    FOVSize = 180
-    FOVColor = Color3.fromRGB(0,170,255)
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "EclipseESP"
+    highlight.Adornee = character
+    highlight.FillTransparency = 1
+    highlight.OutlineColor = BLUE
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.Occluded
+    highlight.Parent = character
 
-    AimButton.Text = "Mira automática: OFF"
-    FOVButton.Text = "FOV visual: OFF"
-    CrossButton.Text = "Mira central: ON"
-    PartButton.Text = "Parte: Head"
-    SmoothButton.Text = "Suavidade: 20%"
-end)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "EclipseInfo"
+    billboard.Adornee = head
+    billboard.Size = UDim2.fromOffset(180,55)
+    billboard.StudsOffset = Vector3.new(0,3,0)
+    billboard.AlwaysOnTop = false
+    billboard.Parent = gui
 
---========================================================
--- FOV E CORES
---========================================================
+    local info = Instance.new("TextLabel")
+    info.Size = UDim2.fromScale(1,1)
+    info.BackgroundTransparency = 1
+    info.TextColor3 = WHITE
+    info.TextStrokeTransparency = 0
+    info.Font = Enum.Font.GothamBold
+    info.TextSize = 12
+    info.Parent = billboard
 
-local FOV = Create("Frame", {
-    Name = "FOVVisual",
-    Size = UDim2.fromOffset(FOVSize,FOVSize),
-    Position = UDim2.fromScale(0.5,0.5),
-    AnchorPoint = Vector2.new(0.5,0.5),
-    BackgroundTransparency = 1,
-    Visible = false
-}, Gui)
+    espObjects[targetPlayer] = Instance.new("Folder")
+    highlight.Parent = espObjects[targetPlayer]
+    billboard.Parent = espObjects[targetPlayer]
+    espObjects[targetPlayer].Parent = gui
 
-Round(FOV,200)
-
-local FOVStroke = Outline(FOV,FOVColor,2)
-
-for _, colorData in ipairs({
-    {"Azul",Color3.fromRGB(0,170,255)},
-    {"Vermelho",Color3.fromRGB(255,65,65)},
-    {"Roxo",Color3.fromRGB(170,85,255)},
-    {"Verde",Color3.fromRGB(70,220,120)},
-    {"Amarelo",Color3.fromRGB(255,220,50)},
-    {"Rosa",Color3.fromRGB(255,100,190)},
-    {"Branco",Color3.fromRGB(255,255,255)}
-}) do
-    Button(Visual,colorData[1],function()
-        FOVColor = colorData[2]
-        FOVStroke.Color = FOVColor
-    end)
+    espObjects[targetPlayer]:SetAttribute("Character", true)
 end
 
---========================================================
--- MIRA CENTRAL
---========================================================
+-- VERIFICAR LINHA DE VISAO
+local function visibleToCamera(character)
+    local head = character:FindFirstChild("Head")
+    if not head then return false end
 
-local Crosshair = Create("TextLabel", {
-    Size = UDim2.fromOffset(30,30),
-    Position = UDim2.fromScale(0.5,0.5),
-    AnchorPoint = Vector2.new(0.5,0.5),
-    BackgroundTransparency = 1,
-    Text = "+",
-    TextColor3 = Color3.new(1,1,1),
-    TextSize = 25,
-    Font = Enum.Font.GothamBold
-}, Gui)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {
+        player.Character,
+        character
+    }
 
---========================================================
--- BOTÃO PARA REABRIR
---========================================================
+    local direction = head.Position - camera.CFrame.Position
+    local result = workspace:Raycast(
+        camera.CFrame.Position,
+        direction,
+        params
+    )
 
-local Reopen = Create("TextButton", {
-    Name = "EclipseReopen",
-    Size = UDim2.fromOffset(44,44),
-    Position = UDim2.new(0,12,0.5,-22),
-    BackgroundColor3 = Color3.fromRGB(15,45,85),
-    Text = "E",
-    TextColor3 = Color3.fromRGB(100,190,255),
-    Font = Enum.Font.GothamBlack,
-    TextSize = 23,
-    Visible = false,
-    Active = true
-}, Gui)
+    return result == nil
+end
 
-Round(Reopen,22)
-Outline(Reopen,Color3.fromRGB(0,145,255),2)
+-- ATUALIZACAO
+local function updateESP()
+    camera = workspace.CurrentCamera
+    if not camera then return end
 
-Reopen.MouseButton1Click:Connect(function()
-    Hidden = false
-    Main.Visible = true
-    Reopen.Visible = false
-end)
+    for _,targetPlayer in ipairs(Players:GetPlayers()) do
+        if targetPlayer ~= player then
+            local character = targetPlayer.Character
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 
---========================================================
--- MINIMIZAR E MAXIMIZAR
---========================================================
+            local allowed = settings.ESP
+                and character
+                and root
+                and humanoid
+                and humanoid.Health > 0
 
-MinButton.MouseButton1Click:Connect(function()
-    Minimized = not Minimized
+            if allowed then
+                local myRoot = player.Character
+                    and player.Character:FindFirstChild("HumanoidRootPart")
 
-    Content.Visible = not Minimized
+                local distance = myRoot
+                    and (myRoot.Position-root.Position).Magnitude
+                    or math.huge
 
-    Main.Size = Minimized
-        and UDim2.fromOffset(340,44)
-        or UDim2.fromOffset(340,480)
+                local sameTeam = settings.TeamCheck
+                    and targetPlayer.Team == player.Team
 
-    MinButton.Text = Minimized and "+" or "–"
-end)
+                local visible = visibleToCamera(character)
 
---========================================================
--- FECHAR
---========================================================
+                allowed = distance <= settings.MaxDistance
+                    and not sameTeam
+                    and (not settings.WallCheck or visible)
+            end
 
-CloseButton.MouseButton1Click:Connect(function()
-    AimEnabled = false
+            if allowed then
+                createESP(targetPlayer)
 
-    if AimConnection then
-        AimConnection:Disconnect()
-    end
+                local folder = espObjects[targetPlayer]
+                local highlight = folder and folder:FindFirstChild("EclipseESP")
+                local billboard = folder and folder:FindFirstChild("EclipseInfo")
 
-    Gui:Destroy()
-end)
-
---========================================================
--- ESCOLHER ALVO MAIS PRÓXIMO
---========================================================
-
-local function GetClosestPlayer()
-    local character = Player.Character
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-
-    if not root then
-        return nil
-    end
-
-    local closestPart = nil
-    local shortestDistance = math.huge
-
-    for _, target in ipairs(Players:GetPlayers()) do
-        if target ~= Player and target.Character then
-            local targetCharacter = target.Character
-            local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
-            local part = targetCharacter:FindFirstChild(SelectedPart)
-
-            if humanoid and humanoid.Health > 0 and part then
-                local distance = (root.Position - part.Position).Magnitude
-
-                if distance < shortestDistance then
-                    shortestDistance = distance
-                    closestPart = part
+                if highlight then
+                    highlight.Enabled = settings.Box
                 end
+
+                if billboard then
+                    local info = billboard:FindFirstChildOfClass("TextLabel")
+                    local text = {}
+
+                    if settings.Name then
+                        table.insert(text,targetPlayer.DisplayName)
+                    end
+
+                    if settings.Distance then
+                        local myRoot = player.Character
+                            and player.Character:FindFirstChild("HumanoidRootPart")
+                        if myRoot then
+                            local d = (myRoot.Position-root.Position).Magnitude
+                            table.insert(text,math.floor(d).." studs")
+                        end
+                    end
+
+                    if settings.Health then
+                        local h = character:FindFirstChildOfClass("Humanoid")
+                        if h then
+                            table.insert(text,"HP: "..math.floor(h.Health))
+                        end
+                    end
+
+                    if info then
+                        info.Text = table.concat(text," | ")
+                    end
+                end
+            else
+                clearESP(targetPlayer)
             end
         end
     end
-
-    return closestPart
 end
 
---========================================================
--- ATUALIZAÇÃO
---========================================================
+-- ATUALIZAR PERSONAGENS
+local function watchPlayer(p)
+    p.CharacterAdded:Connect(function()
+        clearESP(p)
+    end)
+    p.CharacterRemoving:Connect(function()
+        clearESP(p)
+    end)
+end
 
-AimConnection = RunService.RenderStepped:Connect(function()
-    FOV.Visible = FOVEnabled
-    FOV.Size = UDim2.fromOffset(FOVSize,FOVSize)
-    FOVStroke.Color = FOVColor
+for _,p in ipairs(Players:GetPlayers()) do
+    watchPlayer(p)
+end
 
-    Crosshair.Visible = CrosshairEnabled
+Players.PlayerAdded:Connect(watchPlayer)
+Players.PlayerRemoving:Connect(clearESP)
 
-    if AimEnabled then
-        local target = GetClosestPlayer()
-        local camera = workspace.CurrentCamera
+-- MIRA CENTRAL E FOV
+local crosshair = Instance.new("TextLabel")
+crosshair.Size = UDim2.fromOffset(30,30)
+crosshair.AnchorPoint = Vector2.new(0.5,0.5)
+crosshair.Position = UDim2.fromScale(0.5,0.5)
+crosshair.BackgroundTransparency = 1
+crosshair.Text = "+"
+crosshair.TextColor3 = WHITE
+crosshair.TextSize = 25
+crosshair.Font = Enum.Font.GothamBold
+crosshair.Parent = gui
 
-        if target and camera then
-            local current = camera.CFrame
-            local desired = CFrame.lookAt(
-                current.Position,
-                target.Position
-            )
+local fov = Instance.new("Frame")
+fov.Size = UDim2.fromOffset(180,180)
+fov.AnchorPoint = Vector2.new(0.5,0.5)
+fov.Position = UDim2.fromScale(0.5,0.5)
+fov.BackgroundTransparency = 1
+fov.Parent = gui
+corner(fov,200)
+local fovStroke = Instance.new("UIStroke")
+fovStroke.Color = BLUE
+fovStroke.Thickness = 2
+fovStroke.Parent = fov
 
-            camera.CFrame = current:Lerp(
-                desired,
-                math.clamp(AimSmoothness,0,1)
-            )
-        end
+RunService.RenderStepped:Connect(function()
+    crosshair.Visible = settings.Crosshair
+    fov.Visible = settings.FOV
+    fov.Size = UDim2.fromOffset(settings.FOVSize,settings.FOVSize)
+    updateESP()
+end)
+
+close.MouseButton1Click:Connect(function()
+    for p in pairs(espObjects) do
+        clearESP(p)
     end
+    gui:Destroy()
 end)
 
---========================================================
--- POPUP DISCORD
---========================================================
+pageObjects.Home.Visible = true
 
-local Popup = Create("Frame", {
-    Size = UDim2.fromOffset(300,175),
-    Position = UDim2.new(0.5,-150,0.5,-87),
-    BackgroundColor3 = Color3.fromRGB(20,25,38),
-    ZIndex = 30
-}, Gui)
-
-Round(Popup,12)
-Outline(Popup,Color3.fromRGB(0,140,255),1.5)
-
-local PopupTitle = Create("TextLabel", {
-    Size = UDim2.new(1,-20,0,35),
-    Position = UDim2.fromOffset(10,8),
-    BackgroundTransparency = 1,
-    Text = "Eclipse Hub",
-    TextColor3 = Color3.fromRGB(100,180,255),
-    Font = Enum.Font.GothamBold,
-    TextSize = 17,
-    ZIndex = 31
-}, Popup)
-
-local PopupText = Create("TextLabel", {
-    Size = UDim2.new(1,-20,0,40),
-    Position = UDim2.fromOffset(10,43),
-    BackgroundTransparency = 1,
-    Text = "Entre no nosso servidor do Discord?",
-    TextColor3 = Color3.new(1,1,1),
-    Font = Enum.Font.Gotham,
-    TextSize = 12,
-    TextWrapped = true,
-    ZIndex = 31
-}, Popup)
-
-local EnterDiscord = Create("TextButton", {
-    Size = UDim2.new(0.55,-12,0,35),
-    Position = UDim2.new(0,10,1,-45),
-    BackgroundColor3 = Color3.fromRGB(0,110,210),
-    Text = "Entrar no Discord",
-    TextColor3 = Color3.new(1,1,1),
-    Font = Enum.Font.GothamBold,
-    TextSize = 11,
-    ZIndex = 31
-}, Popup)
-Round(EnterDiscord,7)
-
-local Later = Create("TextButton", {
-    Size = UDim2.new(0.4,-10,0,35),
-    Position = UDim2.new(0.6,0,1,-45),
-    BackgroundColor3 = Color3.fromRGB(45,50,65),
-    Text = "Agora não",
-    TextColor3 = Color3.new(1,1,1),
-    Font = Enum.Font.Gotham,
-    TextSize = 11,
-    ZIndex = 31
-}, Popup)
-Round(Later,7)
-
-EnterDiscord.MouseButton1Click:Connect(function()
-    PopupText.Text = DISCORD
-    PopupText.TextSize = 10
-    EnterDiscord.Text = "Link exibido"
-end)
-
-Later.MouseButton1Click:Connect(function()
-    Popup:Destroy()
-end)
-
---=========
-},Home)
-Round(DiscordBox,7)
-
-local CopyDiscord = Button(Home,"Copiar link do Discord",function()
-    if setclipboard then
-        setclipboard(DISCORD)
-        CopyDiscord.Text = "Link copiado!"
-    else
-        DiscordBox:CaptureFocus()
-        DiscordBox.CursorPosition = #DISCORD + 1
-    end
-end)
-
--- GERAL
-local Geral = PageObjects.Geral
-
-Label(Geral,"CONFIGURAÇÕES GERAIS",30,
-    Color3.fromRGB(100,180,255),15)
-
-local AimButton
-AimButton = Button(Geral,"Assistência de mira: OFF",function()
-    AimEnabled = not AimEnabled
-    UpdateButton(AimButton,"Assistência de mira",AimEnabled)
-end)
-
-local SmoothButton
-SmoothButton = Button(Geral,"Suavidade: 20%",function()
-    AimSmoothness = AimSmoothness + 0.10
-    if AimSmoothness > 1 then
-        AimSmoothness = 0.10
-    end
-    SmoothButton.Text = "Suavidade: "..math.floor(AimSmoothness*100).."%"
-end)
-
-Label(Geral,"A seleção de alvo pode ser usada como referência visual.",45,
-    Color3.fromRGB(180,190,210),11)
-
--- VISUAL
-local Visual = PageObjects.Visual
-
-Label(Visual,"CONFIGURAÇÕES VISUAIS",30,
-    Color3.fromRGB(100,180,255),15)
-
-local FOVButton
-FOVButton = Button(Visual,"FOV: OFF",function()
-    FOVEnabled = not FOVEnabled
-    UpdateButton(FOVButton,"FOV",FOVEnabled)
-    FOV.Visible = FOVEnabled
-end)
-
-local CrossButton
-CrossButton = Button(Visual,"Mira central: ON",function()
-    CrosshairEnabled = not CrosshairEnabled
-    UpdateButton(CrossButton,"Mira central",CrosshairEnabled)
-    Crosshair.Visible = CrosshairEnabled
-end)
-
-local SizeButton
-SizeButton = Button(Visual,"Tamanho FOV: 180",function()
-    FOVSize = FOVSize + 20
-    if FOVSize > 300 then
-        FOVSize = 80
-    end
-    FOV.Size = UDim2.fromOffset(FOVSize,FOVSize)
-end)
-
-local Colors = {
-    {"Azul",Color3.fromRGB(0,170,255)},
-    {"Vermelho",Color3.fromRGB(255,65,65)},
-    {"Roxo",Color3.fromRGB(170,80,255)},
-    {"Verde",Color3.fromRGB(50,220,110)},
-    {"Amarelo",Color3.fromRGB(255,220,50)},
-    {"Rosa",Color3.fromRGB(255,100,190)},
-    {"Branco",Color3.fromRGB(255,255,255)}
-}
-
-local ColorIndex = 1
-
-local ColorButton
-ColorButton = Button(Visual,"Cor FOV: Azul",function()
-    ColorIndex = ColorIndex + 1
-    if ColorIndex > #Colors then
-        ColorIndex = 1
-    end
-
-    local selected = Colors[ColorIndex]
-    FOVColor = selected[2]
-    FOVStroke.Color = FOVColor
-    ColorButton.Text = "Cor FOV: "..selected[1]
-end)
-
--- ALVO
-local TargetPage = PageObjects.Alvo
-
-Label(TargetPage,"SELEÇÃO DE PARTE",30,
-    Color3.fromRGB(100,180,255),15)
-
-local Parts = {
-    "Head",
-    "UpperTorso",
-    "LowerTorso",
-    "HumanoidRootPart",
-    "Torso",
-    "Left Arm",
-    "Right Arm",
-    "Left Leg",
-    "Right Leg"
-}
-
-local PartIndex = 1
-
-local PartButton
-PartButton = Button(TargetPage,"Parte: "..SelectedPart,function()
-    PartIndex = PartIndex + 1
-    if PartIndex > #Parts then
-        PartIndex = 1
-    end
-
-    SelectedPart = Parts[PartIndex]
-    PartButton.Text = "Parte: "..SelectedPart
-end)
-
-Label(TargetPage,"A parte selecionada serve como referência para o sistema de treino.",55,
-    Color3.fromRGB(180,190,210),11)
-
--- CONFIG
-local Config = PageObjects.Config
-
-Label(Config,"CONFIGURAÇÕES DO PAINEL",30,
-    Color3.fromRGB(100,180,255),15)
-
--- ÍCONE PARA REABRIR
-local Reopen = Create("TextButton",{
-    Size = UDim2.fromOffset(42,42),
-    Position = UDim2.new(0,15,0.5,-21),
-    BackgroundColor3 = Color3.fromRGB(20,35,65),
-    Text = "E",
-    TextColor3 = Color3.fromRGB(100,180,255),
-    Font = Enum.Font.GothamBlack,
-    TextSize = 22,
-    Visible = false
-},Gui)
-
-Round(Reopen,50)
-Outline(Reopen,Color3.fromRGB(0,145,255),2)
-
-Button(Config,"Esconder menu",function()
-    Hidden = true
-    Main.Visible = false
-    Reopen.Visible = true
-end)
-
-Button(Config,"Restaurar configurações",function()
-    AimEnabled = false
-    FOVEnabled = false
-    CrosshairEnabled = true
-    AimSmoothness = 0.20
-    FOVSize = 180
-    SelectedPart = "Head"
-
-    UpdateButton(AimButton,"Assistência de mira",false)
-    UpdateButton(FOVButton,"FOV",false)
-    UpdateButton(CrossButton,"Mira central",true)
-
-    SmoothButton.Text = "Suavidade: 20%"
-    SizeButton.Text = "Tamanho FOV: 180"
-    FOV.Size = UDim2.fromOffset(180,180)
-    FOV.Visible = false
-    Crosshair.Visible = true
-end)
-
-Reopen.MouseButton1Click:Connect(function()
-    Hidden = false
-    Main.Visible = true
-    Reopen.Visible = false
-end)
-
--- MINIMIZAR
-MinButton.MouseButton1Click:Connect(function()
-    Minimized = not Minimized
-
-    Content.Visible = not Minimized
-    Main.Size = Minimized
-        and UDim2.fromOffset(340,44)
-        or UDim2.fromOffset(340,480)
-
-    MinButton.Text = Minimized and "+" or "–"
-end)
-
--- FECHAR
-CloseButton.MouseButton1Click:Connect(function()
-    Gui:Destroy()
-end)
-
--- FOV VISUAL
-local FOV = Create("Frame",{
-    Name = "FOV",
-    Size = UDim2.fromOffset(FOVSize,FOVSize),
-    Position = UDim2.new(0.5,-FOVSize/2,0.5,-FOVSize/2),
-    BackgroundTransparency = 1,
-    Visible = false
-},Gui)
-
-Round(FOV,200)
-local FOVStroke = Outline(FOV,FOVColor,2)
-
--- MIRA FIXA NO CENTRO
-local Crosshair = Create("Frame",{
-    Name = "Crosshair",
-    Size = UDim2.fromOffset(4,4),
-    Position = UDim2.new(0.5,-2,0.5,-2),
-    BackgroundColor3 = Color3.fromRGB(255,255,255),
-    BorderSizePixel = 0,
-    Visible = true
-},Gui)
-
-Round(Crosshair,10)
-
--- INICIALIZAÇÃO
-ShowPage("Home")
-
-print("ECLIPSE HUB "..VERSION.." carregado!")
+print("ECLIPSE HUB - SHOOTING EDITION carregado!")
+print("By: Neom Mood 2")
