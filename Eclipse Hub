@@ -733,3 +733,14 @@ local later = make("TextButton", {
 corner(later, 8)
 
 join.MouseButton1Cl
+ick:Connect(function()
+    popupLink:CaptureFocus()
+    popupLink.CursorPosition = #popupLink.Text + 1
+    popupLink.SelectionStart = 1
+end)
+
+later.MouseButton1Click:Connect(function()
+    popup:Destroy()
+end)
+
+print("ECLIPSE HUB SHOOTING EDITION carregado!")
