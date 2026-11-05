@@ -731,7 +731,7 @@ local later = make("TextButton", {
     ZIndex = 51
 }, popup)
 corner(later, 8)
-
+l
 join.MouseButton1Cl
 ick:Connect(function()
     popupLink:CaptureFocus()
