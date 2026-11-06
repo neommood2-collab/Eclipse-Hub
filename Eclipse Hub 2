@@ -1,0 +1,750 @@
+-- ============================================
+-- ECLIPSE HUB - MM v40 (COM CRÉDITOS)
+-- PARTE 1/2
+-- ============================================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local Camera = workspace.CurrentCamera
+
+local VERSAO = "v40"
+local DISCORD_LINK = "https://discord.gg/kvphwTWqw"
+local ITEM_MURDERER = "Knife"
+local ITEM_SHERIFF  = "Gun"
+local RAIO_GRAB = 600
+local VELOCIDADE_FARM = 60
+
+local estado = {
+    espAtivado = false, espGeral = false, farmAtivado = false,
+    noclipAtivo = false,
+    aimLock = false, aimAlvo = nil, autoGrab = false,
+    modoZumbi = false,
+    ghost = false,
+    ghostPosOriginal = nil,
+}
+
+local function getRole(player)
+    local containers = {player:FindFirstChild("Backpack"), player.Character}
+    local function hasItem(name)
+        for _, c in pairs(containers) do
+            if c and c:FindFirstChild(name) then return true end
+        end
+        return false
+    end
+    if hasItem(ITEM_MURDERER) then return "Murderer" end
+    if hasItem(ITEM_SHERIFF)  then return "Sheriff"  end
+    return "Innocent"
+end
+
+local function criar(cls, props, parent)
+    local o = Instance.new(cls)
+    for k,v in pairs(props) do o[k] = v end
+    o.Parent = parent
+    return o
+end
+local function arredondar(o, r) criar("UICorner", {CornerRadius = UDim.new(0, r or 8)}, o) end
+local function stroke(o, cor, esp) criar("UIStroke", {Color = cor or Color3.fromRGB(70,75,90), Thickness = esp or 1}, o) end
+
+local gui = criar("ScreenGui", {
+    Name = "EclipseHub", ResetOnSpawn = false,
+    IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+}, PlayerGui)
+
+-- TELA DE CARREGAMENTO
+local loading = criar("Frame", {
+    Size = UDim2.new(1,0,1,0), BackgroundColor3 = Color3.fromRGB(5,5,10),
+    BorderSizePixel = 0, ZIndex = 100,
+}, gui)
+
+local tituloLoading = criar("TextLabel", {
+    Size = UDim2.new(1,0,0,50), Position = UDim2.new(0,0,0.65,0),
+    BackgroundTransparency = 1, Text = "ECLIPSE HUB",
+    Font = Enum.Font.GothamBold, TextSize = 34,
+    TextColor3 = Color3.fromRGB(240,240,255), TextTransparency = 1, ZIndex = 101,
+}, loading)
+
+local subLoading = criar("TextLabel", {
+    Size = UDim2.new(1,0,0,24), Position = UDim2.new(0,0,0.65,50),
+    BackgroundTransparency = 1, Text = "Carregando Murder Mystery...",
+    Font = Enum.Font.Gotham, TextSize = 14,
+    TextColor3 = Color3.fromRGB(140,150,180), TextTransparency = 1, ZIndex = 101,
+}, loading)
+
+local barraBG = criar("Frame", {
+    Size = UDim2.new(0,300,0,6), Position = UDim2.new(0.5,-150,0.65,90),
+    BackgroundColor3 = Color3.fromRGB(30,30,45), BorderSizePixel = 0, ZIndex = 101,
+}, loading)
+arredondar(barraBG, 4)
+
+local barraFill = criar("Frame", {
+    Size = UDim2.new(0,0,1,0), BackgroundColor3 = Color3.fromRGB(200,60,60),
+    BorderSizePixel = 0, ZIndex = 102,
+}, barraBG)
+arredondar(barraFill, 4)
+
+TweenService:Create(tituloLoading, TweenInfo.new(0.6), {TextTransparency = 0}):Play()
+TweenService:Create(subLoading, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0.2), {TextTransparency = 0}):Play()
+
+task.spawn(function()
+    for i = 0, 100, 5 do
+        TweenService:Create(barraFill, TweenInfo.new(0.08), {Size = UDim2.new(i/100,0,1,0)}):Play()
+        task.wait(0.06)
+    end
+    task.wait(0.2)
+    for _, obj in ipairs(loading:GetDescendants()) do
+        if obj:IsA("TextLabel") then
+            TweenService:Create(obj, TweenInfo.new(0.4), {TextTransparency = 1}):Play()
+        elseif obj:IsA("Frame") then
+            TweenService:Create(obj, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
+        end
+    end
+    task.wait(0.5)
+    loading:Destroy()
+end)
+
+-- JANELA
+local TAMANHO_NORMAL = UDim2.new(0,500,0,440)
+local TAMANHO_MIN    = UDim2.new(0,500,0,60)
+
+local janela = criar("Frame", {
+    Size = TAMANHO_NORMAL, Position = UDim2.new(0,60,0,60),
+    BackgroundColor3 = Color3.fromRGB(22,24,30),
+    BorderSizePixel = 0, Active = true, Draggable = true,
+    ClipsDescendants = true, Visible = false,
+}, gui)
+arredondar(janela, 14)
+stroke(janela, Color3.fromRGB(55,60,75), 1.5)
+task.delay(2, function() janela.Visible = true end)
+
+criar("TextLabel", {
+    Size = UDim2.new(1,-130,0,26), Position = UDim2.new(0,18,0,10),
+    BackgroundTransparency = 1, Text = "ECLIPSE HUB",
+    Font = Enum.Font.GothamBold, TextSize = 18,
+    TextColor3 = Color3.fromRGB(200,160,255), TextXAlignment = Enum.TextXAlignment.Left,
+}, janela)
+
+criar("TextLabel", {
+    Size = UDim2.new(1,-130,0,16), Position = UDim2.new(0,18,0,32),
+    BackgroundTransparency = 1, Text = "Murder Mystery • " .. VERSAO,
+    Font = Enum.Font.Gotham, TextSize = 12,
+    TextColor3 = Color3.fromRGB(130,140,160), TextXAlignment = Enum.TextXAlignment.Left,
+}, janela)
+
+local btnMin = criar("TextButton", {
+    Size = UDim2.new(0,28,0,28), Position = UDim2.new(1,-76,0,12),
+    BackgroundColor3 = Color3.fromRGB(120,80,255), Text = "–",
+    Font = Enum.Font.GothamBold, TextSize = 18, TextColor3 = Color3.new(1,1,1),
+    AutoButtonColor = false,
+}, janela)
+arredondar(btnMin, 8)
+
+local btnFechar = criar("TextButton", {
+    Size = UDim2.new(0,28,0,28), Position = UDim2.new(1,-42,0,12),
+    BackgroundColor3 = Color3.fromRGB(200,60,60), Text = "✕",
+    Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Color3.new(1,1,1),
+    AutoButtonColor = false,
+}, janela)
+arredondar(btnFechar, 8)
+
+local conteudoPrincipal = criar("Frame", {
+    Size = UDim2.new(1,0,1,-60), Position = UDim2.new(0,0,0,60),
+    BackgroundTransparency = 1,
+}, janela)
+
+local barraAbas = criar("Frame", {
+    Size = UDim2.new(1,-24,0,36), Position = UDim2.new(0,12,0,0),
+    BackgroundColor3 = Color3.fromRGB(30,33,42), BorderSizePixel = 0,
+}, conteudoPrincipal)
+arredondar(barraAbas, 10)
+
+local abas = {"Home", "Geral", "Sheriff", "Murderer", "Zumbi", "Ghost", "Atalhos", "Farm", "Créditos"}
+local coresAba = {
+    Home     = Color3.fromRGB(255, 200, 80),
+    Geral    = Color3.fromRGB(180,120,255),
+    Sheriff  = Color3.fromRGB(60,140,255),
+    Murderer = Color3.fromRGB(255,70,70),
+    Zumbi    = Color3.fromRGB(120,200,80),
+    Ghost    = Color3.fromRGB(180,180,220),
+    Atalhos  = Color3.fromRGB(255,140,200),
+    Farm     = Color3.fromRGB(255,180,60),
+    ["Créditos"] = Color3.fromRGB(255, 215, 0),
+}
+local botoesAba, conteudos = {}, {}
+
+local areaConteudo = criar("Frame", {
+    Size = UDim2.new(1,-24,1,-50), Position = UDim2.new(0,12,0,44),
+    BackgroundTransparency = 1,
+}, conteudoPrincipal)
+
+for i, nome in ipairs(abas) do
+    local btn = criar("TextButton", {
+        Size = UDim2.new(1/#abas,-3,1,-8),
+        Position = UDim2.new((i-1)/#abas,1.5,0,4),
+        BackgroundColor3 = Color3.fromRGB(40,44,54), Text = nome,
+        Font = Enum.Font.GothamBold, TextSize = 9,
+        TextColor3 = Color3.fromRGB(180,185,200), AutoButtonColor = false,
+    }, barraAbas)
+    arredondar(btn, 8)
+    botoesAba[nome] = btn
+
+    local scroll = criar("ScrollingFrame", {
+        Size = UDim2.new(1,0,1,0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 6,
+        ScrollBarImageColor3 = Color3.fromRGB(120,80,255),
+        CanvasSize = UDim2.new(0,0,0,0),
+        Visible = false,
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    }, areaConteudo)
+    conteudos[nome] = scroll
+
+    btn.MouseButton1Click:Connect(function()
+        for n, b in pairs(botoesAba) do
+            local ativo = (n == nome)
+            TweenService:Create(b, TweenInfo.new(0.15), {
+                BackgroundColor3 = ativo and coresAba[n] or Color3.fromRGB(40,44,54)
+            }):Play()
+            b.TextColor3 = ativo and Color3.new(1,1,1) or Color3.fromRGB(180,185,200)
+        end
+        for n, c in pairs(conteudos) do c.Visible = (n == nome) end
+    end)
+end
+
+botoesAba.Home.BackgroundColor3 = coresAba.Home
+botoesAba.Home.TextColor3 = Color3.new(1,1,1)
+conteudos.Home.Visible = true
+
+local minimizado = false
+btnMin.MouseButton1Click:Connect(function()
+    minimizado = not minimizado
+    TweenService:Create(janela, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Size = minimizado and TAMANHO_MIN or TAMANHO_NORMAL
+    }):Play()
+    btnMin.Text = minimizado and "+" or "–"
+    conteudoPrincipal.Visible = not minimizado
+end)
+
+local function criarToggle(parent, y, texto, corAtiva, callback)
+    local btn = criar("TextButton", {
+        Size = UDim2.new(1,-8,0,36), Position = UDim2.new(0,4,0,y),
+        BackgroundColor3 = Color3.fromRGB(40,44,54), Text = texto .. ": OFF",
+        Font = Enum.Font.GothamBold, TextSize = 12,
+        TextColor3 = Color3.fromRGB(200,205,215), AutoButtonColor = false,
+    }, parent)
+    arredondar(btn, 8)
+    stroke(btn, Color3.fromRGB(55,60,75), 1)
+    local ativo = false
+    btn.MouseButton1Click:Connect(function()
+        ativo = not ativo
+        btn.Text = texto .. ": " .. (ativo and "ON" or "OFF")
+        TweenService:Create(btn, TweenInfo.new(0.15), {
+            BackgroundColor3 = ativo and corAtiva or Color3.fromRGB(40,44,54)
+        }):Play()
+        btn.TextColor3 = ativo and Color3.new(1,1,1) or Color3.fromRGB(200,205,215)
+        if callback then callback(ativo) end
+    end)
+    return btn
+end
+
+-- FUNÇÕES
+local function toggleESP(on) estado.espGeral = on end
+local function toggleFullbright(on)
+    if on then
+        Lighting.Brightness = 5
+        Lighting.ClockTime = 12
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 100000
+    else
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 14
+        Lighting.GlobalShadows = true
+    end
+end
+local function toggleNoFog(on)
+    Lighting.FogStart = on and 100000 or 0
+    Lighting.FogEnd = 100000
+end
+local function toggleSpeed(on)
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then hum.WalkSpeed = on and 50 or 16 end
+end
+local function toggleJump(on)
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then hum.JumpPower = on and 120 or 50 end
+end
+local function toggleAutoGrab(on) estado.autoGrab = on end
+local function toggleNoclip(on)
+    estado.noclipAtivo = on
+    local char = LocalPlayer.Character
+    if char then
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") then part.CanCollide = not on end
+        end
+    end
+end
+
+local function setGhost(on)
+    estado.ghost = on
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if on then
+        if not root then return end
+        estado.ghostPosOriginal = root.CFrame
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
+        end
+        if hum then hum.PlatformStand = true end
+        Camera.CameraType = Enum.CameraType.Scriptable
+    else
+        if root and estado.ghostPosOriginal then
+            root.CFrame = estado.ghostPosOriginal
+        end
+        if hum then hum.PlatformStand = false end
+        Camera.CameraType = Enum.CameraType.Custom
+        if hum then Camera.CameraSubject = hum end
+        estado.ghostPosOriginal = nil
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if estado.ghost then
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+        local moveDir = Vector3.new(0,0,0)
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Vector3.new(0,0,-1) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir + Vector3.new(0,0,1) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir + Vector3.new(-1,0,0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Vector3.new(1,0,0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0,1,0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then moveDir = moveDir + Vector3.new(0,-1,0) end
+        if moveDir.Magnitude > 0 then
+            local dir = Camera.CFrame:VectorToWorldSpace(moveDir.Unit)
+            root.CFrame = root.CFrame + dir * 60 * task.wait()
+        end
+    end
+end)
+
+-- HOME
+local cHome = conteudos.Home
+criar("TextLabel", {
+    Size = UDim2.new(1,-8,0,40), Position = UDim2.new(0,4,0,4),
+    BackgroundTransparency = 1, Text = "ECLIPSE HUB",
+    Font = Enum.Font.GothamBold, TextSize = 24,
+    TextColor3 = Color3.fromRGB(200,160,255), TextXAlignment = Enum.TextXAlignment.Left,
+}, cHome)
+
+local versaoLabel = criar("TextLabel", {
+    Size = UDim2.new(1,-8,0,28), Position = UDim2.new(0,4,0,48),
+    BackgroundTransparency = 1,
+    Text = "VERSÃO " .. VERSAO .. " • MURDER MYSTERY",
+    Font = Enum.Font.GothamBold, TextSize = 15,
+    TextColor3 = Color3.fromRGB(255, 220, 100),
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, cHome)
+stroke(versaoLabel, Color3.fromRGB(255, 200, 60), 1)
+
+criar("TextLabel", {
+    Size = UDim2.new(1,-8,0,18), Position = UDim2.new(0,4,0,84),
+    BackgroundTransparency = 1, Text = "DISCORD",
+    Font = Enum.Font.GothamBold, TextSize = 11,
+    TextColor3 = Color3.fromRGB(180,160,255), TextXAlignment = Enum.TextXAlignment.Left,
+}, cHome)
+
+local btnDiscord = criar("TextButton", {
+    Size = UDim2.new(1,-8,0,36), Position = UDim2.new(0,4,0,104),
+    BackgroundColor3 = Color3.fromRGB(88, 101, 242),
+    Text = "Entrar no Discord",
+    Font = Enum.Font.GothamBold, TextSize = 13,
+    TextColor3 = Color3.new(1,1,1), AutoButtonColor = true,
+}, cHome)
+arredondar(btnDiscord, 8)
+stroke(btnDiscord, Color3.fromRGB(120, 140, 255), 1.5)
+btnDiscord.MouseButton1Click:Connect(function()
+    if setclipboard then pcall(function() setclipboard(DISCORD_LINK) end) end
+    btnDiscord.Text = "Link copiado!"
+    task.wait(1.5)
+    btnDiscord.Text = "Entrar no Discord"
+end)
+
+criar("TextLabel", {
+    Size = UDim2.new(1,-8,0,20), Position = UDim2.new(0,4,0,152),
+    BackgroundTransparency = 1, Text = "FUNÇÕES PRINCIPAIS",
+    Font = Enum.Font.GothamBold, TextSize = 12,
+    TextColor3 = Color3.fromRGB(180,160,255), TextXAlignment = Enum.TextXAlignment.Left,
+}, cHome)
+
+criarToggle(cHome, 178, "ESP Geral", coresAba.Geral, toggleESP)
+criarToggle(cHome, 222, "AimLock no Murderer", coresAba.Murderer, function(on) setAimLock(on, "Murderer") end)
+criarToggle(cHome, 266, "Auto Grab (600)", Color3.fromRGB(255,220,100), toggleAutoGrab)
+criarToggle(cHome, 310, "Ghost (voar)", coresAba.Ghost, setGhost)
+criarToggle(cHome, 354, "Noclip", Color3.fromRGB(120,180,255), toggleNoclip)
+
+-- AIMLOCK
+local function acharAlvo(roleAlvo)
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    local melhor, melhorDist = nil, math.huge
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local pRoot = player.Character:FindFirstChild("HumanoidRootPart")
+            local hum = player.Character:FindFirstChildOfClass("Humanoid")
+            if pRoot and hum and hum.Health > 0 and getRole(player) == roleAlvo then
+                local dist = (pRoot.Position - root.Position).Magnitude
+                if dist < melhorDist then
+                    melhorDist = dist
+                    melhor = pRoot
+                end
+            end
+        end
+    end
+    return melhor
+end
+local function setAimLock(ativo, alvoRole)
+    estado.aimLock = ativo
+    estado.aimAlvo = ativo and alvoRole or nil
+end
+
+-- GERAL
+local cGeral = conteudos.Geral
+criarToggle(cGeral, 0, "ESP Geral (todos)", coresAba.Geral, toggleESP)
+criarToggle(cGeral, 44, "Fullbright", Color3.fromRGB(255,255,150), toggleFullbright)
+criarToggle(cGeral, 88, "No Fog", Color3.fromRGB(200,200,200), toggleNoFog)
+criarToggle(cGeral, 132, "Speed (x3)", Color3.fromRGB(100,255,200), toggleSpeed)
+criarToggle(cGeral, 176, "Jump (Pulo Alto)", Color3.fromRGB(255,150,200), toggleJump)
+criarToggle(cGeral, 220, "Auto Grab (600)", Color3.fromRGB(255,220,100), toggleAutoGrab)
+
+-- SHERIFF
+local cSheriff = conteudos.Sheriff
+criarToggle(cSheriff, 0, "ESP Sheriff (Azul)", coresAba.Sheriff, function(on) estado.espAtivado = on end)
+criarToggle(cSheriff, 44, "AimLock no Murderer", coresAba.Murderer, function(on) setAimLock(on, "Murderer") end)
+
+-- MURDERER
+local cMurder = conteudos.Murderer
+criarToggle(cMurder, 0, "ESP Murderer (Vermelho)", coresAba.Murderer, function(on) estado.espAtivado = on end)
+criarToggle(cMurder, 44, "AimLock no Sheriff", coresAba.Sheriff, function(on) setAimLock(on, "Sheriff") end)
+
+-- ZUMBI
+local cZumbi = conteudos.Zumbi
+criarToggle(cZumbi, 0, "Modo Zumbi (ESP)", coresAba.Zumbi, function(on)
+    estado.modoZumbi = on
+    estado.espGeral = on
+end)
+criarToggle(cZumbi, 44, "AimLock no Zumbi", coresAba.Zumbi, function(on) setAimLock(on, "Murderer") end)
+
+-- GHOST
+local cGhost = conteudos.Ghost
+criarToggle(cGhost, 0, "Ghost (voar + atravessar)", coresAba.Ghost, setGhost)
+criar("TextLabel", {
+    Size = UDim2.new(1,-8,0,80), Position = UDim2.new(0,4,0,44),
+    BackgroundTransparency = 1,
+    Text = "WASD = voar pelo mapa\nEspaço = subir\nCtrl = descer\nAtravessa paredes automaticamente",
+    Font = Enum.Font.Gotham, TextSize = 11,
+    TextColor3 = Color3.fromRGB(130,140,160), TextWrapped = true,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, cGhost)
+
+-- ATALHOS
+local cAtalhos = conteudos.Atalhos
+criarToggle(cAtalhos, 0, "ESP Geral", coresAba.Geral, toggleESP)
+criarToggle(cAtalhos, 44, "Fullbright", Color3.fromRGB(255,255,150), toggleFullbright)
+criarToggle(cAtalhos, 88, "No Fog", Color3.fromRGB(200,200,200), toggleNoFog)
+criarToggle(cAtalhos, 132, "Speed (x3)", Color3.fromRGB(100,255,200), toggleSpeed)
+criarToggle(cAtalhos, 176, "Jump (Pulo Alto)", Color3.fromRGB(255,150,200), toggleJump)
+criarToggle(cAtalhos, 220, "Auto Grab (600)", Color3.fromRGB(255,220,100), toggleAutoGrab)
+criarToggle(cAtalhos, 264, "Noclip", Color3.fromRGB(120,180,255), toggleNoclip)
+criarToggle(cAtalhos, 308, "Ghost (voar)", coresAba.Ghost, setGhost)
+
+-- FARM
+local cFarm = conteudos.Farm
+criarToggle(cFarm, 0, "Autofarm (Coin - v60)", coresAba.Farm, function(on)
+    estado.farmAtivado = on
+    estado.noclipAtivo = on
+    local char = LocalPlayer.Character
+    if char then
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") then part.CanCollide = not on end
+        end
+    end
+    if on then
+        task.spawn(function()
+            while estado.farmAtivado do
+                local c = LocalPlayer.Character
+                local root = c and c:FindFirstChild("HumanoidRootPart")
+                if not root then task.wait(1) continue end
+                for _, item in pairs(workspace:GetDescendants()) do
+                    if not estado.farmAtivado then break end
+                    if item.Name == "Coin" then
+                        local parte = nil
+                        if item:IsA("BasePart") then parte = item
+                        elseif item:IsA("Model") then parte = item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")
+                        elseif item:IsA("Tool") then parte = item:FindFirstChild("Handle") end
+                        if parte then
+                            while estado.farmAtivado do
+                                local dist = (parte.Position - root.Position).Magnitude
+                                if dist < 5 then break end
+                                local dir = (parte.Position - root.Position).Unit
+                                root.CFrame = root.CFrame + dir * VELOCIDADE_FARM * task.wait()
+                                 end
+                            local cd = item:FindFirstChildWhichIsA("ClickDetector", true)
+                            if cd then fireclickdetector(cd) end
+                            local pp = item:FindFirstChildWhichIsA("ProximityPrompt", true)
+                            if pp then fireproximityprompt(pp) end
+                            task.wait(0.2)
+                        end
+                    end
+                end
+                task.wait(0.3)
+            end
+        end)
+    end
+end)
+
+-- CRÉDITOS
+local cCreditos = conteudos["Créditos"]
+criar("TextLabel", {
+    Size = UDim2.new(1,-8,0,50), Position = UDim2.new(0,4,0,10),
+    BackgroundTransparency = 1,
+    Text = "ECLIPSE HUB",
+    Font = Enum.Font.GothamBold, TextSize = 28,
+    TextColor3 = Color3.fromRGB(255, 215, 0),
+    TextXAlignment = Enum.TextXAlignment.Center,
+}, cCreditos)
+criar("TextLabel", {
+    Size = UDim2.new(1,-8,0,24), Position = UDim2.new(0,4,0,60),
+    BackgroundTransparency = 1,
+    Text = "CRÉDITOS",
+    Font = Enum.Font.GothamBold, TextSize = 14,
+    TextColor3 = Color3.fromRGB(180,160,255),
+    TextXAlignment = Enum.TextXAlignment.Center,
+}, cCreditos)
+criar("TextLabel", {
+    Size = UDim2.new(1,-8,0,40), Position = UDim2.new(0,4,0,100),
+    BackgroundTransparency = 1,
+    Text = "By: Neom Mood",
+    Font = Enum.Font.GothamBold, TextSize = 22,
+    TextColor3 = Color3.fromRGB(255, 240, 120),
+    TextXAlignment = Enum.TextXAlignment.Center,
+}, cCreditos)
+criar("TextLabel", {
+    Size = UDim2.new(1,-8,0,20), Position = UDim2.new(0,4,0,150),
+    BackgroundTransparency = 1,
+    Text = "Desenvolvedor do Eclipse Hub",
+    Font = Enum.Font.Gotham, TextSize = 12,
+    TextColor3 = Color3.fromRGB(130,140,160),
+    TextXAlignment = Enum.TextXAlignment.Center,
+}, cCreditos)
+criar("TextLabel", {
+    Size = UDim2.new(1,-8,0,20), Position = UDim2.new(0,4,0,200),
+    BackgroundTransparency = 1,
+    Text = "Obrigado por usar! 💜",
+    Font = Enum.Font.Gotham, TextSize = 13,
+    TextColor3 = Color3.fromRGB(200,160,255),
+    TextXAlignment = Enum.TextXAlignment.Center,
+}, cCreditos)
+
+-- ESP
+local highlights = {}
+local function limparESP()
+    for _, h in pairs(highlights) do
+        if h and h.Parent then h:Destroy() end
+    end
+    highlights = {}
+end
+local function corDoCargo(role)
+    if estado.modoZumbi then
+        if role == "Murderer" then return Color3.fromRGB(120, 200, 80)
+        elseif role == "Sheriff" then return Color3.fromRGB(0, 120, 255)
+        else return Color3.fromRGB(200, 200, 200) end
+    else
+        if role == "Murderer" then return Color3.fromRGB(255, 0, 0)
+        elseif role == "Sheriff" then return Color3.fromRGB(0, 120, 255)
+        else return Color3.fromRGB(0, 255, 80) end
+    end
+end
+local function atualizarESP()
+    if not (estado.espAtivado or estado.espGeral) then
+        if next(highlights) then limparESP() end
+        return
+    end
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local char = player.Character
+            local role = getRole(player)
+            local cor = corDoCargo(role)
+            local h = highlights[player]
+            if not h or not h.Parent or h.Adornee ~= char then
+                if h and h.Parent then h:Destroy() end
+                h = Instance.new("Highlight")
+                h.Name = "EclipseESP"
+                h.Adornee = char
+                h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                h.FillTransparency = 0.4
+                h.OutlineTransparency = 0
+                h.FillColor = cor
+                h.OutlineColor = cor
+                h.Parent = char
+                highlights[player] = h
+            else
+                h.FillColor = cor
+                h.OutlineColor = cor
+            end
+            h.Enabled = true
+        end
+    end
+    for player, h in pairs(highlights) do
+        if not player.Parent or not player.Character then
+            if h and h.Parent then h:Destroy() end
+            highlights[player] = nil
+        end
+    end
+end
+
+-- AUTO GRAB
+local grabEmAndamento = false
+local xerifesMonitorados = {}
+local posMorteXerife = nil
+
+local function parteDaGun(item)
+    if item:IsA("Tool") then return item:FindFirstChild("Handle")
+    elseif item:IsA("Model") then return item.PrimaryPart or item:FindFirstChildWhichIsA("BasePart")
+    elseif item:IsA("BasePart") then return item end
+    return nil
+end
+
+local function tentarGrab()
+    if not estado.autoGrab or grabEmAndamento then return end
+    if not posMorteXerife then return end
+    local meuChar = LocalPlayer.Character
+    local meuRoot = meuChar and meuChar:FindFirstChild("HumanoidRootPart")
+    if not meuRoot then return end
+    local jaTenho = (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild(ITEM_SHERIFF))
+        or (meuChar and meuChar:FindFirstChild(ITEM_SHERIFF))
+    if jaTenho then return end
+    local gunEncontrada = nil
+    local menorDist = RAIO_GRAB
+    for _, item in pairs(workspace:GetDescendants()) do
+        if item.Name == ITEM_SHERIFF then
+            local parte = parteDaGun(item)
+            if parte then
+                local dist = (parte.Position - posMorteXerife).Magnitude
+                if dist < menorDist then
+                    menorDist = dist
+                    gunEncontrada = item
+                end
+            end
+        end
+    end
+    if not gunEncontrada then return end
+    grabEmAndamento = true
+    local posOriginal = meuRoot.CFrame
+    local parte = parteDaGun(gunEncontrada)
+    meuRoot.CFrame = parte.CFrame + Vector3.new(0, 3, 0)
+    task.spawn(function()
+        local tempoMax, tempo, pegou = 2, 0, false
+        while tempo < tempoMax and not pegou do
+            task.wait(0.1)
+            tempo = tempo + 0.1
+            parte.CFrame = meuRoot.CFrame
+            task.wait(0.05)
+            local cd = gunEncontrada:FindFirstChildWhichIsA("ClickDetector", true)
+            if cd then fireclickdetector(cd) end
+            local pp = gunEncontrada:FindFirstChildWhichIsA("ProximityPrompt", true)
+            if pp then fireproximityprompt(pp) end
+            if gunEncontrada:IsA("Tool") then
+                pcall(function() gunEncontrada.Parent = LocalPlayer.Backpack end)
+            end
+            local tem = (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild(ITEM_SHERIFF))
+                or (meuChar and meuChar:FindFirstChild(ITEM_SHERIFF))
+            if tem then pegou = true break end
+        end
+        task.wait(0.1)
+        if meuRoot and meuRoot.Parent then
+            meuRoot.CFrame = posOriginal
+        end
+        grabEmAndamento = false
+    end)
+end
+
+local function monitorarXerife(player)
+    if xerifesMonitorados[player] then return end
+    xerifesMonitorados[player] = true
+    local function conectarPersonagem(char)
+        local hum = char:WaitForChild("Humanoid", 5)
+        if not hum then return end
+        hum.Died:Connect(function()
+            if getRole(player) ~= "Sheriff" then return end
+            local corpo = char:FindFirstChild("HumanoidRootPart")
+            if corpo then
+                posMorteXerife = corpo.Position
+            else
+                posMorteXerife = char:GetPivot().Position
+            end
+            task.wait(3)
+            if estado.autoGrab then tentarGrab() end
+            task.wait(10)
+            posMorteXerife = nil
+        end)
+    end
+    if player.Character then conectarPersonagem(player.Character) end
+    player.CharacterAdded:Connect(conectarPersonagem)
+end
+
+task.spawn(function()
+    while true do
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and getRole(player) == "Sheriff" then
+                monitorarXerife(player)
+            end
+        end
+        task.wait(1)
+    end
+end)
+
+-- LOOP PRINCIPAL
+RunService.RenderStepped:Connect(function()
+    if estado.espAtivado or estado.espGeral then atualizarESP() end
+    if not (estado.espAtivado or estado.espGeral) and next(highlights) then limparESP() end
+    if estado.aimLock and estado.aimAlvo then
+        local alvo = acharAlvo(estado.aimAlvo)
+        if alvo then
+            local posCam = Camera.CFrame.Position
+            local dirAlvo = (alvo.Position - posCam).Unit
+            local cfAlvo = CFrame.lookAt(posCam, posCam + dirAlvo)
+            Camera.CFrame = Camera.CFrame:Lerp(cfAlvo, 0.4)
+        end
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(p)
+    if highlights[p] then
+        if highlights[p].Parent then highlights[p]:Destroy() end
+        highlights[p] = nil
+    end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    if estado.noclipAtivo then
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
+        end
+    end
+    if estado.ghost then
+        estado.ghost = false
+        Camera.CameraType = Enum.CameraType.Custom
+    end
+end)
+
+btnFechar.MouseButton1Click:Connect(function()
+    gui:Destroy()
+end)
