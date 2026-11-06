@@ -1,196 +1,305 @@
 
 --========================================================
 -- ECLIPSE HUB - SHOOTING EDITION
--- Versao atualizada
+-- By: Neom Mood 2
 -- Roblox Studio | LocalScript
--- Coloque em StarterPlayerScripts
 --========================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 local camera = workspace.CurrentCamera
+
 local DISCORD_LINK = "https://discord.gg/kvphwTWqw"
 
--- LIMPAR VERSAO ANTERIOR
 local old = playerGui:FindFirstChild("EclipseHub")
 if old then old:Destroy() end
 
--- ESTADOS
-local settings = {
-    ESP = false,
-    Box = true,
-    Tracer = false,
-    Name = true,
-    Distance = true,
-    Health = true,
-    Skeleton = false,
-    WallCheck = true,
-    TeamCheck = false,
-    MaxDistance = 1000,
-    Crosshair = true,
-    FOV = false,
-    FOVSize = 180
-}
-
-local espObjects = {}
-
--- CORES
 local BLUE = Color3.fromRGB(0,145,255)
 local DARK = Color3.fromRGB(19,23,34)
 local PANEL = Color3.fromRGB(12,16,26)
 local WHITE = Color3.new(1,1,1)
+local RED = Color3.fromRGB(255,65,75)
+local GREEN = Color3.fromRGB(65,220,130)
 
+local settings = {
+    ESP = false,
+    Box = true,
+    Tracer = false,
+    Skeleton = false,
+    Name = true,
+    Distance = true,
+    Health = true,
+    TeamCheck = false,
+    WallCheck = false,
+    Aimlock = false,
+    FOV = true,
+    FOVSize = 180,
+    Smoothness = 0.18,
+    MaxDistance = 1000,
+    Crosshair = true,
+    Speed = 16,
+    Jump = 50,
+    LowGraphics = false
+}
+
+local espObjects = {}
+local minimized = false
+
+--========================================================
 -- GUI
+--========================================================
+
 local gui = Instance.new("ScreenGui")
 gui.Name = "EclipseHub"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
+gui.DisplayOrder = 100
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = playerGui
 
-local function corner(obj, radius)
+local function round(obj,radius)
     local c = Instance.new("UICorner")
     c.CornerRadius = UDim.new(0,radius or 8)
     c.Parent = obj
 end
 
-local function stroke(obj,color,thickness)
+local function outline(obj,color,thickness)
     local s = Instance.new("UIStroke")
     s.Color = color or BLUE
     s.Thickness = thickness or 1
     s.Parent = obj
+    return s
 end
 
-local function label(parent,text,height,size,color)
+local function makeLabel(parent,text,height,size,color)
     local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(1,-10,0,height or 30)
+    l.Size = UDim2.new(1,-12,0,height or 30)
     l.BackgroundTransparency = 1
     l.Text = text
     l.TextColor3 = color or WHITE
     l.Font = Enum.Font.GothamBold
     l.TextSize = size or 13
+    l.TextXAlignment = Enum.TextXAlignment.Left
     l.Parent = parent
     return l
 end
 
-local function button(parent,text,callback)
+local function makeButton(parent,text,callback)
     local b = Instance.new("TextButton")
-    b.Size = UDim2.new(1,-10,0,36)
+    b.Size = UDim2.new(1,-12,0,36)
     b.BackgroundColor3 = Color3.fromRGB(39,46,64)
     b.TextColor3 = WHITE
     b.Text = text
     b.Font = Enum.Font.Gotham
     b.TextSize = 13
     b.Parent = parent
-    corner(b,7)
-    b.MouseButton1Click:Connect(callback)
+    round(b,7)
+    b.Activated:Connect(callback)
     return b
 end
 
--- CARREGAMENTO
+local function makeToggle(parent,text,key,callback)
+    local b
+
+    local function refresh()
+        b.Text = text..(settings[key] and "  [ON]" or "  [OFF]")
+        b.BackgroundColor3 = settings[key]
+            and Color3.fromRGB(0,85,150)
+            or Color3.fromRGB(39,46,64)
+    end
+
+    b = makeButton(parent,text,function()
+        settings[key] = not settings[key]
+        refresh()
+        if callback then callback(settings[key]) end
+    end)
+
+    refresh()
+    return b
+end
+
+local function section(parent,text)
+    return makeLabel(parent,text,28,14,BLUE)
+end
+
+--========================================================
+-- LOADING
+--========================================================
+
 local loading = Instance.new("Frame")
 loading.Size = UDim2.fromScale(1,1)
 loading.BackgroundColor3 = Color3.fromRGB(9,12,21)
 loading.Parent = gui
 
-local title = label(loading,"ECLIPSE HUB",55,30,BLUE)
-title.Position = UDim2.fromScale(0,0.36)
+local loadingTitle = Instance.new("TextLabel")
+loadingTitle.Size = UDim2.new(1,0,0,55)
+loadingTitle.Position = UDim2.fromScale(0,0.36)
+loadingTitle.BackgroundTransparency = 1
+loadingTitle.Text = "ECLIPSE HUB"
+loadingTitle.TextColor3 = BLUE
+loadingTitle.Font = Enum.Font.GothamBlack
+loadingTitle.TextSize = 30
+loadingTitle.Parent = loading
 
-local subtitle = label(loading,"Shooting Edition • Carregando...",30,13)
-subtitle.Position = UDim2.fromScale(0,0.48)
+local loadingText = Instance.new("TextLabel")
+loadingText.Size = UDim2.new(1,0,0,30)
+loadingText.Position = UDim2.fromScale(0,0.48)
+loadingText.BackgroundTransparency = 1
+loadingText.Text = "Shooting Edition • Carregando..."
+loadingText.TextColor3 = WHITE
+loadingText.Font = Enum.Font.Gotham
+loadingText.TextSize = 13
+loadingText.Parent = loading
 
-local back = Instance.new("Frame")
-back.Size = UDim2.fromOffset(250,8)
-back.Position = UDim2.new(0.5,-125,0.57,0)
-back.BackgroundColor3 = Color3.fromRGB(35,42,58)
-back.Parent = loading
-corner(back,8)
+local barBack = Instance.new("Frame")
+barBack.Size = UDim2.fromOffset(250,8)
+barBack.Position = UDim2.new(0.5,-125,0.57,0)
+barBack.BackgroundColor3 = Color3.fromRGB(35,42,58)
+barBack.Parent = loading
+round(barBack,8)
 
 local bar = Instance.new("Frame")
 bar.Size = UDim2.fromScale(0,1)
 bar.BackgroundColor3 = BLUE
-bar.Parent = back
-corner(bar,8)
+bar.Parent = barBack
+round(bar,8)
 
-for i=1,100 do
+for i = 1,100 do
     bar.Size = UDim2.fromScale(i/100,1)
-    task.wait(0.018)
+    task.wait(0.012)
 end
 
 loading:Destroy()
 
--- CONVITE DISCORD
+--========================================================
+-- DISCORD
+--========================================================
+
 local popup = Instance.new("Frame")
 popup.Size = UDim2.fromOffset(310,190)
 popup.Position = UDim2.new(0.5,-155,0.5,-95)
 popup.BackgroundColor3 = DARK
+popup.ZIndex = 20
 popup.Parent = gui
-corner(popup,12)
-stroke(popup,BLUE,1.5)
+round(popup,12)
+outline(popup,BLUE,1.5)
 
-local popTitle = label(popup,"Entre no nosso Discord",40,17,BLUE)
-popTitle.Position = UDim2.fromOffset(0,12)
+local popupTitle = Instance.new("TextLabel")
+popupTitle.Size = UDim2.new(1,0,0,40)
+popupTitle.Position = UDim2.fromOffset(0,8)
+popupTitle.BackgroundTransparency = 1
+popupTitle.Text = "Entre no nosso Discord"
+popupTitle.TextColor3 = BLUE
+popupTitle.Font = Enum.Font.GothamBold
+popupTitle.TextSize = 17
+popupTitle.ZIndex = 21
+popupTitle.Parent = popup
 
 local link = Instance.new("TextBox")
 link.Size = UDim2.new(1,-24,0,35)
-link.Position = UDim2.fromOffset(12,62)
+link.Position = UDim2.fromOffset(12,53)
 link.BackgroundColor3 = Color3.fromRGB(35,42,58)
 link.TextColor3 = WHITE
 link.Text = DISCORD_LINK
 link.TextEditable = false
 link.ClearTextOnFocus = false
 link.Font = Enum.Font.Gotham
-link.TextSize = 12
+link.TextSize = 11
+link.ZIndex = 21
 link.Parent = popup
-corner(link,7)
+round(link,7)
 
-local copy = button(popup,"Selecionar link para copiar",function()
+local copyButton = Instance.new("TextButton")
+copyButton.Size = UDim2.new(1,-12,0,32)
+copyButton.Position = UDim2.fromOffset(6,96)
+copyButton.BackgroundColor3 = Color3.fromRGB(39,46,64)
+copyButton.Text = "Selecionar link"
+copyButton.TextColor3 = WHITE
+copyButton.Font = Enum.Font.Gotham
+copyButton.TextSize = 12
+copyButton.ZIndex = 21
+copyButton.Parent = popup
+round(copyButton,7)
+
+copyButton.Activated:Connect(function()
     link:CaptureFocus()
     link.CursorPosition = 1
-    link.SelectionStart = #link.Text + 1
+    link.SelectionStart = #link.Text+1
 end)
-copy.Position = UDim2.fromOffset(5,105)
 
-local enter = button(popup,"Agora não",function()
-    popup:Destroy()
-end)
-enter.Position = UDim2.fromOffset(5,147)
-enter.Size = UDim2.new(0.5,-8,0,32)
-
-local join = button(popup,"Entrar agora",function()
-    link:CaptureFocus()
-    link.CursorPosition = 1
-    link.SelectionStart = #link.Text + 1
-end)
-join.Position = UDim2.new(0.5,3,0,147)
-join.Size = UDim2.new(0.5,-8,0,32)
-join.BackgroundColor3 = BLUE
-
+--========================================================
 -- MENU PRINCIPAL
-local main = Instance.new("Frame")
-main.Size = UDim2.fromOffset(330,465)
-main.Position = UDim2.new(0.5,-165,0.5,-232)
-main.BackgroundColor3 = DARK
-main.Parent = gui
-main.Active = true
-corner(main,12)
-stroke(main,BLUE,1.5)
+--========================================================
 
--- BARRA SUPERIOR
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = UDim2.fromOffset(340,480)
+main.Position = UDim2.new(0.5,-170,0.5,-240)
+main.BackgroundColor3 = DARK
+main.Visible = false
+main.Active = true
+main.Parent = gui
+round(main,12)
+outline(main,BLUE,1.5)
+
+local function enterMenu()
+    if popup.Parent then popup:Destroy() end
+    main.Visible = true
+end
+
+local decline = Instance.new("TextButton")
+decline.Size = UDim2.new(0.5,-8,0,34)
+decline.Position = UDim2.new(0,5,0,145)
+decline.BackgroundColor3 = Color3.fromRGB(39,46,64)
+decline.Text = "Agora não"
+decline.TextColor3 = WHITE
+decline.Font = Enum.Font.Gotham
+decline.TextSize = 12
+decline.ZIndex = 21
+decline.Parent = popup
+round(decline,7)
+decline.Activated:Connect(enterMenu)
+
+local join = Instance.new("TextButton")
+join.Size = UDim2.new(0.5,-8,0,34)
+join.Position = UDim2.new(0.5,3,0,145)
+join.BackgroundColor3 = BLUE
+join.Text = "Entrar agora"
+join.TextColor3 = WHITE
+join.Font = Enum.Font.Gotham
+join.TextSize = 12
+join.ZIndex = 21
+join.Parent = popup
+round(join,7)
+join.Activated:Connect(function()
+    link:CaptureFocus()
+    link.CursorPosition = 1
+    link.SelectionStart = #link.Text+1
+    enterMenu()
+end)
+
 local top = Instance.new("Frame")
 top.Size = UDim2.new(1,0,0,43)
 top.BackgroundColor3 = PANEL
 top.Parent = main
 top.Active = true
-corner(top,10)
+round(top,10)
 
-local topTitle = label(top,"ECLIPSE HUB",35,15,Color3.fromRGB(100,185,255))
-topTitle.Position = UDim2.fromOffset(10,4)
-topTitle.TextXAlignment = Enum.TextXAlignment.Left
-topTitle.Size = UDim2.new(1,-100,0,35)
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,-100,1,0)
+title.Position = UDim2.fromOffset(10,0)
+title.BackgroundTransparency = 1
+title.Text = "ECLIPSE HUB"
+title.TextColor3 = Color3.fromRGB(100,185,255)
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Font = Enum.Font.GothamBlack
+title.TextSize = 15
+title.Parent = top
 
 local minimize = Instance.new("TextButton")
 minimize.Size = UDim2.fromOffset(35,35)
@@ -200,7 +309,7 @@ minimize.Text = "–"
 minimize.TextColor3 = WHITE
 minimize.TextSize = 22
 minimize.Parent = top
-corner(minimize,7)
+round(minimize,7)
 
 local close = Instance.new("TextButton")
 close.Size = UDim2.fromOffset(35,35)
@@ -210,9 +319,9 @@ close.Text = "×"
 close.TextColor3 = WHITE
 close.TextSize = 20
 close.Parent = top
-corner(close,7)
+round(close,7)
 
--- ARRASTAR MENU
+-- Arrastar menu
 local dragging = false
 local dragStart
 local startPosition
@@ -231,12 +340,12 @@ UIS.InputChanged:Connect(function(input)
         input.UserInputType == Enum.UserInputType.MouseMovement
         or input.UserInputType == Enum.UserInputType.Touch
     ) then
-        local delta = input.Position - dragStart
+        local delta = input.Position-dragStart
         main.Position = UDim2.new(
             startPosition.X.Scale,
-            startPosition.X.Offset + delta.X,
+            startPosition.X.Offset+delta.X,
             startPosition.Y.Scale,
-            startPosition.Y.Offset + delta.Y
+            startPosition.Y.Offset+delta.Y
         )
     end
 end)
@@ -248,7 +357,10 @@ UIS.InputEnded:Connect(function(input)
     end
 end)
 
--- CONTEUDO
+--========================================================
+-- ABAS
+--========================================================
+
 local content = Instance.new("Frame")
 content.Position = UDim2.fromOffset(8,50)
 content.Size = UDim2.new(1,-16,1,-58)
@@ -259,8 +371,8 @@ local tabBar = Instance.new("ScrollingFrame")
 tabBar.Size = UDim2.new(1,0,0,38)
 tabBar.BackgroundTransparency = 1
 tabBar.ScrollBarThickness = 0
-tabBar.AutomaticCanvasSize = Enum.AutomaticSize.X
 tabBar.ScrollingDirection = Enum.ScrollingDirection.X
+tabBar.AutomaticCanvasSize = Enum.AutomaticSize.X
 tabBar.Parent = content
 
 local tabLayout = Instance.new("UIListLayout")
@@ -274,19 +386,27 @@ pages.Size = UDim2.new(1,0,1,-43)
 pages.BackgroundTransparency = 1
 pages.Parent = content
 
-local pageNames = {
-    "Home","Geral","Visual","Alvo","ESP","Config"
-}
-
+local names = {"Home","Geral","Visual","Alvo","ESP","Config"}
 local pageObjects = {}
+local tabButtons = {}
 
-for _,name in ipairs(pageNames) do
+local function showPage(name)
+    for n,page in pairs(pageObjects) do
+        page.Visible = n == name
+        tabButtons[n].BackgroundColor3 =
+            n == name and Color3.fromRGB(0,85,150)
+            or Color3.fromRGB(39,48,67)
+    end
+end
+
+for _,name in ipairs(names) do
     local page = Instance.new("ScrollingFrame")
     page.Name = name
     page.Size = UDim2.fromScale(1,1)
     page.BackgroundTransparency = 1
     page.ScrollBarThickness = 3
     page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    page.CanvasSize = UDim2.new()
     page.Visible = false
     page.Parent = pages
 
@@ -304,110 +424,166 @@ for _,name in ipairs(pageNames) do
     tab.Font = Enum.Font.GothamBold
     tab.TextSize = 11
     tab.Parent = tabBar
-    corner(tab,6)
+    round(tab,6)
+    tabButtons[name] = tab
 
-    tab.MouseButton1Click:Connect(function()
-        for n,p in pairs(pageObjects) do
-            p.Visible = n == name
-        end
+    tab.Activated:Connect(function()
+        showPage(name)
     end)
 end
 
-local function toggle(parent,name,key)
-    local b
-    b = button(parent,name..": OFF",function()
-        settings[key] = not settings[key]
-        b.Text = name..(settings[key] and ": ON" or ": OFF")
-        b.BackgroundColor3 = settings[key]
-            and Color3.fromRGB(0,85,150)
-            or Color3.fromRGB(39,46,64)
-    end)
-    return b
-end
-
+--========================================================
 -- HOME
+--========================================================
+
 local home = pageObjects.Home
-label(home,"Bem-vindo ao Eclipse Hub!",35,17,BLUE)
-label(home,"Shooting Edition",25,13)
-label(home,"By: Neom Mood 2",45,19,Color3.fromRGB(255,205,75))
-label(home,"Convite oficial do Discord",25,12)
+section(home,"BEM-VINDO AO ECLIPSE HUB")
+makeLabel(home,"Shooting Edition",25,13)
+makeLabel(home,"By: Neom Mood 2",35,17,Color3.fromRGB(255,205,75))
+makeLabel(home,"Discord oficial",25,12)
 
 local homeLink = Instance.new("TextBox")
-homeLink.Size = UDim2.new(1,-10,0,35)
+homeLink.Size = UDim2.new(1,-12,0,35)
 homeLink.Text = DISCORD_LINK
 homeLink.TextEditable = false
 homeLink.ClearTextOnFocus = false
 homeLink.TextColor3 = WHITE
 homeLink.BackgroundColor3 = Color3.fromRGB(35,42,58)
 homeLink.Parent = home
-corner(homeLink,7)
+round(homeLink,7)
 
-button(home,"Selecionar link",function()
+makeButton(home,"Selecionar link",function()
     homeLink:CaptureFocus()
     homeLink.CursorPosition = 1
-    homeLink.SelectionStart = #homeLink.Text + 1
+    homeLink.SelectionStart = #homeLink.Text+1
 end)
 
+--========================================================
 -- GERAL
+--========================================================
+
 local general = pageObjects.Geral
-label(general,"Configurações gerais",30,15,BLUE)
-label(general,"Esta versão mantém os controles visuais.",35,12)
+section(general,"CONFIGURAÇÕES GERAIS")
 
+local function getHumanoid()
+    local character = player.Character
+    return character and character:FindFirstChildOfClass("Humanoid")
+end
+
+local function setSpeed(value)
+    settings.Speed = value
+    local h = getHumanoid()
+    if h then h.WalkSpeed = value end
+end
+
+local function setJump(value)
+    settings.Jump = value
+    local h = getHumanoid()
+    if h then
+        h.UseJumpPower = true
+        h.JumpPower = value
+    end
+end
+
+section(general,"VELOCIDADE")
+
+for _,v in ipairs({16,24,32,40}) do
+    makeButton(general,"Velocidade "..v,function()
+        setSpeed(v)
+    end)
+end
+
+section(general,"PULO")
+
+for _,v in ipairs({50,65,80,100}) do
+    makeButton(general,"Pulo "..v,function()
+        setJump(v)
+    end)
+end
+
+section(general,"DESEMPENHO")
+
+makeToggle(general,"Modo desempenho","LowGraphics",function(enabled)
+    Lighting.GlobalShadows = not enabled
+end)
+
+makeButton(general,"Restaurar movimento",function()
+    setSpeed(16)
+    setJump(50)
+end)
+
+--========================================================
 -- VISUAL
+--========================================================
+
 local visual = pageObjects.Visual
-label(visual,"Elementos visuais",30,15,BLUE)
-toggle(visual,"Mira central","Crosshair")
-toggle(visual,"FOV visual","FOV")
+section(visual,"CONFIGURAÇÕES VISUAIS")
 
-button(visual,"FOV pequeno",function()
-    settings.FOVSize = 120
-end)
+makeToggle(visual,"Mira central","Crosshair")
+makeToggle(visual,"Círculo FOV","FOV")
 
-button(visual,"FOV médio",function()
-    settings.FOVSize = 180
-end)
+for _,v in ipairs({120,180,250,350}) do
+    makeButton(visual,"Tamanho FOV: "..v,function()
+        settings.FOVSize = v
+    end)
+end
 
-button(visual,"FOV grande",function()
-    settings.FOVSize = 250
-end)
-
+--========================================================
 -- ALVO
-local target = pageObjects.Alvo
-label(target,"Verificação de visibilidade",30,15,BLUE)
-toggle(target,"Wall Check","WallCheck")
-toggle(target,"Team Check","TeamCheck")
-label(target,"Wall Check ignora personagens ocultos por paredes.",45,11)
+--========================================================
 
+local alvo = pageObjects.Alvo
+section(alvo,"CONFIGURAÇÕES DE ALVO")
+
+makeToggle(alvo,"Aimlock","Aimlock")
+makeToggle(alvo,"Team Check","TeamCheck")
+makeToggle(alvo,"Wall Check","WallCheck")
+
+section(alvo,"SUAVIDADE DA CÂMERA")
+
+for _,v in ipairs({
+    {name="Suave",value=0.08},
+    {name="Média",value=0.18},
+    {name="Rápida",value=0.35},
+    {name="Instantânea",value=1}
+}) do
+    makeButton(alvo,v.name,function()
+        settings.Smoothness = v.value
+    end)
+end
+
+--========================================================
 -- ESP
-local esp = pageObjects.ESP
-label(esp,"ECLIPSE • ESP",35,17,BLUE)
-toggle(esp,"ESP geral","ESP")
-toggle(esp,"Box","Box")
-toggle(esp,"Tracer","Tracer")
-toggle(esp,"Nome","Name")
-toggle(esp,"Distância","Distance")
-toggle(esp,"Vida","Health")
-toggle(esp,"Skeleton","Skeleton")
-label(esp,"Distância máxima: 1000 studs",30,12)
+--========================================================
 
-button(esp,"Distância: 250",function()
-    settings.MaxDistance = 250
-end)
+local espPage = pageObjects.ESP
+section(espPage,"ECLIPSE PLAYER ESP")
 
-button(esp,"Distância: 500",function()
-    settings.MaxDistance = 500
-end)
+makeToggle(espPage,"ESP geral","ESP")
+makeToggle(espPage,"Box","Box")
+makeToggle(espPage,"Tracer","Tracer")
+makeToggle(espPage,"Skeleton","Skeleton")
+makeToggle(espPage,"Nome","Name")
+makeToggle(espPage,"Distância","Distance")
+makeToggle(espPage,"Vida","Health")
 
-button(esp,"Distância: 1000",function()
-    settings.MaxDistance = 1000
-end)
+section(espPage,"DISTÂNCIA MÁXIMA")
 
+for _,v in ipairs({250,500,1000}) do
+    makeButton(espPage,v.." studs",function()
+        settings.MaxDistance = v
+    end)
+end
+
+--========================================================
 -- CONFIG
+--========================================================
+
 local config = pageObjects.Config
-label(config,"Configurações do menu",35,15,BLUE)
+section(config,"CONFIGURAÇÕES DO MENU")
 
 local reopen = Instance.new("TextButton")
-reopen.Size = UDim2.fromOffset(43,43)
+reopen.Size = UDim2.fromOffset(45,45)
 reopen.Position = UDim2.new(0,12,0.5,-20)
 reopen.BackgroundColor3 = Color3.fromRGB(15,45,85)
 reopen.Text = "E"
@@ -416,190 +592,408 @@ reopen.Font = Enum.Font.GothamBlack
 reopen.TextSize = 23
 reopen.Visible = false
 reopen.Parent = gui
-corner(reopen,22)
-stroke(reopen,BLUE,2)
+round(reopen,22)
+outline(reopen,BLUE,2)
 
-button(config,"Esconder menu",function()
+makeButton(config,"Esconder menu",function()
     main.Visible = false
     reopen.Visible = true
 end)
 
-reopen.MouseButton1Click:Connect(function()
+reopen.Activated:Connect(function()
     main.Visible = true
     reopen.Visible = false
 end)
 
-local minimized = false
-
-minimize.MouseButton1Click:Connect(function()
+minimize.Activated:Connect(function()
     minimized = not minimized
     content.Visible = not minimized
     main.Size = minimized
-        and UDim2.fromOffset(330,43)
-        or UDim2.fromOffset(330,465)
+        and UDim2.fromOffset(340,43)
+        or UDim2.fromOffset(340,480)
     minimize.Text = minimized and "+" or "–"
 end)
 
--- OBJETOS DE ESP
-local function clearESP(targetPlayer)
-    local oldObject = espObjects[targetPlayer]
-    if oldObject then
-        oldObject:Destroy()
-        espObjects[targetPlayer] = nil
-    end
+--========================================================
+-- CROSSHAIR E FOV
+--========================================================
+
+local crosshair = Instance.new("TextLabel")
+crosshair.Size = UDim2.fromOffset(30,30)
+crosshair.AnchorPoint = Vector2.new(0.5,0.5)
+crosshair.Position = UDim2.fromScale(0.5,0.5)
+crosshair.BackgroundTransparency = 1
+crosshair.Text = "+"
+crosshair.TextColor3 = WHITE
+crosshair.TextSize = 25
+crosshair.Font = Enum.Font.GothamBold
+crosshair.Parent = gui
+
+local fov = Instance.new("Frame")
+fov.Size = UDim2.fromOffset(settings.FOVSize,settings.FOVSize)
+fov.AnchorPoint = Vector2.new(0.5,0.5)
+fov.Position = UDim2.fromScale(0.5,0.5)
+fov.BackgroundTransparency = 1
+fov.Parent = gui
+round(fov,200)
+outline(fov,BLUE,2)
+
+--========================================================
+-- VISIBILIDADE
+--========================================================
+
+local function visibleToCamera(character,part)
+    if not character or not part then return false end
+
+    camera = workspace.CurrentCamera
+    if not camera then return false end
+
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {player.Character}
+
+    local origin = camera.CFrame.Position
+    local direction = part.Position-origin
+    local result = workspace:Raycast(origin,direction,params)
+
+    return result == nil or result.Instance:IsDescendantOf(character)
 end
 
-local function createESP(targetPlayer)
-    if espObjects[targetPlayer] then return end
+--========================================================
+-- VALIDAÇÃO SEPARADA: ESP E AIMLOCK
+--========================================================
 
-    local character = targetPlayer.Character
-    if not character then return end
+local function validESPPlayer(p)
+    if p == player or not p.Character then return false end
 
-    local head = character:FindFirstChild("Head")
-    local root = character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local char = p.Character
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local root = char:FindFirstChild("HumanoidRootPart")
 
-    if not head or not root or not humanoid then return end
+    if not hum or hum.Health <= 0 or not root then
+        return false
+    end
 
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "EclipseESP"
-    highlight.Adornee = character
-    highlight.FillTransparency = 1
-    highlight.OutlineColor = BLUE
-    highlight.OutlineTransparency = 0
-    highlight.DepthMode = Enum.HighlightDepthMode.Occluded
-    highlight.Parent = character
+    local myRoot = player.Character
+        and player.Character:FindFirstChild("HumanoidRootPart")
 
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "EclipseInfo"
-    billboard.Adornee = head
-    billboard.Size = UDim2.fromOffset(180,55)
-    billboard.StudsOffset = Vector3.new(0,3,0)
-    billboard.AlwaysOnTop = false
-    billboard.Parent = gui
+    if not myRoot then return false end
+
+    return (myRoot.Position-root.Position).Magnitude
+        <= settings.MaxDistance
+end
+
+local function validAimPlayer(p)
+    if not validESPPlayer(p) then return false end
+
+    if settings.TeamCheck and p.Team == player.Team then
+        return false
+    end
+
+    if settings.WallCheck then
+        local head = p.Character:FindFirstChild("Head")
+
+        if not head or not visibleToCamera(p.Character,head) then
+            return false
+        end
+    end
+
+    return true
+end
+
+--========================================================
+-- JOGADOR MAIS PRÓXIMO FISICAMENTE
+-- NÃO USA FOV E NÃO EXIGE ESTAR NA TELA
+--========================================================
+
+local function getClosestPlayer()
+    local myRoot = player.Character
+        and player.Character:FindFirstChild("HumanoidRootPart")
+
+    if not myRoot then return nil end
+
+    local closest = nil
+    local shortestDistance = math.huge
+
+    for _,p in ipairs(Players:GetPlayers()) do
+        if validAimPlayer(p) then
+            local targetRoot =
+                p.Character:FindFirstChild("HumanoidRootPart")
+
+            if targetRoot then
+                local distance =
+                    (myRoot.Position-targetRoot.Position).Magnitude
+
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    closest = p
+                end
+            end
+        end
+    end
+
+    return closest
+end
+
+--========================================================
+-- ESP ELEMENT--========================================================
+-- ESP ELEMENTOS
+--========================================================
+
+local function newLine(parent,color)
+    local line = Instance.new("Frame")
+    line.AnchorPoint = Vector2.new(0.5,0.5)
+    line.BackgroundColor3 = color or BLUE
+    line.BorderSizePixel = 0
+    line.Size = UDim2.fromOffset(0,2)
+    line.Visible = false
+    line.Parent = parent
+    return line
+end
+
+local function drawLine(line,a,b)
+    local delta = b-a
+    line.Position = UDim2.fromOffset(
+        (a.X+b.X)/2,
+        (a.Y+b.Y)/2
+    )
+    line.Size = UDim2.fromOffset(delta.Magnitude,2)
+    line.Rotation = math.deg(math.atan2(delta.Y,delta.X))
+    line.Visible = true
+end
+
+local function hideLine(line)
+    line.Visible = false
+end
+
+local function createESP(p)
+    if espObjects[p] then return end
+
+    local folder = Instance.new("Folder")
+    folder.Name = "ESP_"..p.Name
+    folder.Parent = gui
+
+    local box = Instance.new("Frame")
+    box.BackgroundTransparency = 1
+    box.BorderSizePixel = 0
+    box.Visible = false
+    box.Parent = folder
+    outline(box,BLUE,2)
+
+    local tracer = newLine(folder,BLUE)
 
     local info = Instance.new("TextLabel")
-    info.Size = UDim2.fromScale(1,1)
+    info.Size = UDim2.fromOffset(230,22)
+    info.AnchorPoint = Vector2.new(0.5,1)
     info.BackgroundTransparency = 1
     info.TextColor3 = WHITE
     info.TextStrokeTransparency = 0
     info.Font = Enum.Font.GothamBold
     info.TextSize = 12
-    info.Parent = billboard
+    info.Visible = false
+    info.Parent = folder
 
-    espObjects[targetPlayer] = Instance.new("Folder")
-    highlight.Parent = espObjects[targetPlayer]
-    billboard.Parent = espObjects[targetPlayer]
-    espObjects[targetPlayer].Parent = gui
-    espObjects[targetPlayer]:SetAttribute("Character", true)
-end
+    local healthBack = Instance.new("Frame")
+    healthBack.BackgroundColor3 = Color3.fromRGB(35,35,35)
+    healthBack.BorderSizePixel = 0
+    healthBack.Visible = false
+    healthBack.Parent = folder
 
--- VERIFICAR LINHA DE VISAO
-local function visibleToCamera(character)
-    local head = character:FindFirstChild("Head")
-    if not head then return false end
+    local healthFill = Instance.new("Frame")
+    healthFill.Size = UDim2.fromScale(1,1)
+    healthFill.BackgroundColor3 = GREEN
+    healthFill.BorderSizePixel = 0
+    healthFill.Parent = healthBack
 
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = {
-        player.Character,
-        character
+    local bones = {}
+    for i=1,14 do
+        bones[i] = newLine(folder,WHITE)
+    end
+
+    espObjects[p] = {
+        Folder = folder,
+        Box = box,
+        Tracer = tracer,
+        Info = info,
+        HealthBack = healthBack,
+        HealthFill = healthFill,
+        Bones = bones
     }
-
-    local direction = head.Position - camera.CFrame.Position
-
-    local result = workspace:Raycast(
-        camera.CFrame.Position,
-        direction,
-        params
-    )
-
-    return result == nil
 end
 
--- ATUALIZACAO
-local function updateESP()
-    camera = workspace.CurrentCamera
-    if not camera then return end
+local function clearESP(p)
+    local data = espObjects[p]
 
-    for _,targetPlayer in ipairs(Players:GetPlayers()) do
-        if targetPlayer ~= player then
-            local character = targetPlayer.Character
-            local root = character and character:FindFirstChild("HumanoidRootPart")
-            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if data then
+        data.Folder:Destroy()
+        espObjects[p] = nil
+    end
+end
 
-            local allowed = settings.ESP
-                and character
-                and root
-                and humanoid
-                and humanoid.Health > 0
+local function projectPart(character,name)
+    local part = character:FindFirstChild(name)
+    if not part then return nil end
 
-            if allowed then
-                local myRoot = player.Character
-                    and player.Character:FindFirstChild("HumanoidRootPart")
+    local pos,onScreen = camera:WorldToViewportPoint(part.Position)
 
-                local distance = myRoot
-                    and (myRoot.Position-root.Position).Magnitude
-                    or math.huge
+    if not onScreen or pos.Z <= 0 then return nil end
 
-                local sameTeam = settings.TeamCheck
-                    and targetPlayer.Team == player.Team
+    return Vector2.new(pos.X,pos.Y)
+end
 
-                local visible = visibleToCamera(character)
+local skeletonPairs = {
+    {"Head","UpperTorso"},
+    {"UpperTorso","LowerTorso"},
+    {"UpperTorso","LeftUpperArm"},
+    {"LeftUpperArm","LeftLowerArm"},
+    {"LeftLowerArm","LeftHand"},
+    {"UpperTorso","RightUpperArm"},
+    {"RightUpperArm","RightLowerArm"},
+    {"RightLowerArm","RightHand"},
+    {"LowerTorso","LeftUpperLeg"},
+    {"LeftUpperLeg","LeftLowerLeg"},
+    {"LeftLowerLeg","LeftFoot"},
+    {"LowerTorso","RightUpperLeg"},
+    {"RightUpperLeg","RightLowerLeg"},
+    {"RightLowerLeg","RightFoot"}
+}
 
-                allowed = distance <= settings.MaxDistance
-                    and not sameTeam
-                    and (not settings.WallCheck or visible)
-            end
+local function updateESP(p)
+    if not settings.ESP or not validESPPlayer(p) then
+        clearESP(p)
+        return
+    end
 
-            if allowed then
-                createESP(targetPlayer)
+    createESP(p)
 
-                local folder = espObjects[targetPlayer]
-                local highlight = folder and folder:FindFirstChild("EclipseESP")
-                local billboard = folder and folder:FindFirstChild("EclipseInfo")
+    local data = espObjects[p]
+    local character = p.Character
+    local hum = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
 
-                if highlight then
-                    highlight.Enabled = settings.Box
+    if not data or not hum or not root then return end
+
+    local cf,size = character:GetBoundingBox()
+    local minX,minY = math.huge,math.huge
+    local maxX,maxY = -math.huge,-math.huge
+    local found = false
+
+    for x=-1,1,2 do
+        for y=-1,1,2 do
+            for z=-1,1,2 do
+                local world = cf:PointToWorldSpace(Vector3.new(
+                    size.X*x/2,
+                    size.Y*y/2,
+                    size.Z*z/2
+                ))
+
+                local pos,onScreen = camera:WorldToViewportPoint(world)
+
+                if onScreen and pos.Z > 0 then
+                    found = true
+                    minX = math.min(minX,pos.X)
+                    minY = math.min(minY,pos.Y)
+                    maxX = math.max(maxX,pos.X)
+                    maxY = math.max(maxY,pos.Y)
                 end
-
-                if billboard then
-                    local info = billboard:FindFirstChildOfClass("TextLabel")
-                    local text = {}
-
-                    if settings.Name then
-                        table.insert(text,targetPlayer.DisplayName)
-                    end
-
-                    if settings.Distance then
-                        local myRoot = player.Character
-                            and player.Character:FindFirstChild("HumanoidRootPart")
-
-                        if myRoot then
-                            local d = (myRoot.Position-root.Position).Magnitude
-                            table.insert(text,math.floor(d).." studs")
-                        end
-                    end
-
-                    if settings.Health then
-                        local h = character:FindFirstChildOfClass("Humanoid")
-                        if h then
-                            table.insert(text,"HP: "..math.floor(h.Health))
-                        end
-                    end
-
-                    if info then
-                        info.Text = table.concat(text," | ")
-                    end
-                end
-            else
-                clearESP(targetPlayer)
             end
+        end
+    end
+
+    if not found then
+        data.Box.Visible = false
+        data.Info.Visible = false
+        data.HealthBack.Visible = false
+        hideLine(data.Tracer)
+
+        for _,line in ipairs(data.Bones) do
+            hideLine(line)
+        end
+
+        return
+    end
+
+    local width = maxX-minX
+    local height = maxY-minY
+
+    data.Box.Position = UDim2.fromOffset(minX,minY)
+    data.Box.Size = UDim2.fromOffset(width,height)
+    data.Box.Visible = settings.Box
+
+    if settings.Tracer then
+        local viewport = camera.ViewportSize
+
+        drawLine(
+            data.Tracer,
+            Vector2.new(viewport.X/2,viewport.Y),
+            Vector2.new((minX+maxX)/2,maxY)
+        )
+    else
+        hideLine(data.Tracer)
+    end
+
+    local text = {}
+
+    if settings.Name then
+        table.insert(text,p.DisplayName)
+    end
+
+    if settings.Distance then
+        local myRoot = player.Character
+            and player.Character:FindFirstChild("HumanoidRootPart")
+
+        if myRoot then
+            table.insert(text,math.floor(
+                (myRoot.Position-root.Position).Magnitude
+            ).." studs")
+        end
+    end
+
+    if settings.Health then
+        table.insert(text,"HP "..math.floor(hum.Health))
+    end
+
+    data.Info.Text = table.concat(text," | ")
+    data.Info.Position = UDim2.fromOffset((minX+maxX)/2,minY-3)
+    data.Info.Visible = #text > 0
+
+    if settings.Health then
+        local ratio = math.clamp(
+            hum.Health/math.max(hum.MaxHealth,1),
+            0,
+            1
+        )
+
+        data.HealthBack.Position = UDim2.fromOffset(minX-6,minY)
+        data.HealthBack.Size = UDim2.fromOffset(4,height)
+        data.HealthBack.Visible = true
+
+        data.HealthFill.Size = UDim2.new(1,0,ratio,0)
+        data.HealthFill.Position = UDim2.new(0,0,1-ratio,0)
+        data.HealthFill.BackgroundColor3 =
+            ratio > 0.5 and GREEN
+            or ratio > 0.25 and Color3.fromRGB(255,190,50)
+            or RED
+    else
+        data.HealthBack.Visible = false
+    end
+
+    for i,pair in ipairs(skeletonPairs) do
+        local a = projectPart(character,pair[1])
+        local b = projectPart(character,pair[2])
+
+        if settings.Skeleton and a and b then
+            drawLine(data.Bones[i],a,b)
+        else
+            hideLine(data.Bones[i])
         end
     end
 end
 
--- ATUALIZAR PERSONAGENS
+--========================================================
+-- JOGADORES
+--========================================================
+
 local function watchPlayer(p)
     p.CharacterAdded:Connect(function()
         clearESP(p)
@@ -617,46 +1011,91 @@ end
 Players.PlayerAdded:Connect(watchPlayer)
 Players.PlayerRemoving:Connect(clearESP)
 
--- MIRA CENTRAL E FOV
-local crosshair = Instance.new("TextLabel")
-crosshair.Size = UDim2.fromOffset(30,30)
-crosshair.AnchorPoint = Vector2.new(0.5,0.5)
-crosshair.Position = UDim2.fromScale(0.5,0.5)
-crosshair.BackgroundTransparency = 1
-crosshair.Text = "+"
-crosshair.TextColor3 = WHITE
-crosshair.TextSize = 25
-crosshair.Font = Enum.Font.GothamBold
-crosshair.Parent = gui
+--========================================================
+-- MOVIMENTO
+--========================================================
 
-local fov = Instance.new("Frame")
-fov.Size = UDim2.fromOffset(180,180)
-fov.AnchorPoint = Vector2.new(0.5,0.5)
-fov.Position = UDim2.fromScale(0.5,0.5)
-fov.BackgroundTransparency = 1
-fov.Parent = gui
-corner(fov,200)
+local function applyMovement()
+    local hum = getHumanoid()
 
-local fovStroke = Instance.new("UIStroke")
-fovStroke.Color = BLUE
-fovStroke.Thickness = 2
-fovStroke.Parent = fov
+    if hum then
+        hum.WalkSpeed = settings.Speed
+        hum.UseJumpPower = true
+        hum.JumpPower = settings.Jump
+    end
+end
 
-RunService.RenderStepped:Connect(function()
+player.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    applyMovement()
+end)
+
+--========================================================
+-- LOOP PRINCIPAL
+--========================================================
+
+local renderConnection
+
+renderConnection = RunService.RenderStepped:Connect(function()
+    camera = workspace.CurrentCamera
+    if not camera then return end
+
     crosshair.Visible = settings.Crosshair
     fov.Visible = settings.FOV
     fov.Size = UDim2.fromOffset(settings.FOVSize,settings.FOVSize)
-    updateESP()
+
+    -- ESP INDEPENDENTE DO AIMLOCK
+    if settings.ESP then
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p ~= player then
+                updateESP(p)
+            end
+        end
+    else
+        for p in pairs(espObjects) do
+            clearESP(p)
+        end
+    end
+
+    -- Aimlock seleciona o jogador fisicamente mais próximo
+    if settings.Aimlock then
+        local target = getClosestPlayer()
+
+        if target and target.Character then
+            local head = target.Character:FindFirstChild("Head")
+
+            if head then
+                local goal = CFrame.lookAt(
+                    camera.CFrame.Position,
+                    head.Position
+                )
+
+                camera.CFrame = camera.CFrame:Lerp(
+                    goal,
+                    settings.Smoothness
+                )
+            end
+        end
+    end
 end)
 
-close.MouseButton1Click:Connect(function()
+--========================================================
+-- FECHAR
+--========================================================
+
+close.Activated:Connect(function()
+    if renderConnection then
+        renderConnection:Disconnect()
+    end
+
     for p in pairs(espObjects) do
         clearESP(p)
     end
+
     gui:Destroy()
 end)
 
-pageObjects.Home.Visible = true
+showPage("Home")
 
 print("ECLIPSE HUB - SHOOTING EDITION carregado!")
 print("By: Neom Mood 2")
